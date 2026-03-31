@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image'; // Importe o componente Image
 
 // Componente para um Card individual
 function EnvironmentCard({ title, description }) {
@@ -22,17 +23,25 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/'); // Redireciona para a página de login
-    router.refresh(); // Garante que a página seja recarregada
+    router.push('/');
+    router.refresh();
   };
 
   return (
     <div className="min-h-screen w-full text-white">
-      {/* Cabeçalho */}
+      {/* Cabeçalho -- ALTERAÇÃO AQUI ABAIXO */}
       <header className="bg-black/20 p-4 flex justify-between items-center shadow-lg">
-        <h1 className="text-2xl font-bold text-acelerar-light-blue">
-          Portal Acelerar
-        </h1>
+        <div className="flex items-center gap-4"> {/* Container para agrupar logo e texto */}
+          <Image
+            src="/logo_acelerar_sidebar.png"
+            alt="Logo Acelerar"
+            width={40} // Ajuste o tamanho conforme necessário
+            height={40}
+          />
+          <h1 className="text-2xl font-bold text-acelerar-light-blue">
+            Portal Acelerar
+          </h1>
+        </div>
         <button
           onClick={handleLogout}
           className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
