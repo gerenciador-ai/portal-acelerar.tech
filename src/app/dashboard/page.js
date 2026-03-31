@@ -35,8 +35,8 @@ export default function DashboardPage() {
           <Image
             src="/logo_acelerar_sidebar.png"
             alt="Logo Acelerar"
-            width={40} // Ajuste o tamanho conforme necessário
-            height={40}
+            width={80} // Ajuste o tamanho conforme necessário
+            height={80}
           />
           <h1 className="text-2xl font-bold text-acelerar-light-blue">
             Portal Acelerar
