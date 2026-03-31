@@ -3,31 +3,37 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useState, useEffect } from 'react'; // Importar useState e useEffect
+import { useState, useEffect } from 'react';
 
-// Componente para um Card individual
-function EnvironmentCard({ title, description }) {
+// Componente para um Card individual, agora com funcionalidade de link
+function EnvironmentCard({ title, description, href }) {
+  const router = useRouter();
   return (
-    <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl shadow-lg hover:bg-white/20 transition-all cursor-pointer">
+    <div
+      onClick={() => router.push(href)} // Adiciona a ação de clique
+      className="bg-white/10 backdrop-blur-md p-6 rounded-xl shadow-lg hover:bg-white/20 transition-all cursor-pointer"
+    >
       <h3 className="text-xl font-bold text-acelerar-white">{title}</h3>
       <p className="mt-2 text-acelerar-white/80">{description}</p>
     </div>
   );
 }
 
-// Objeto com as informações de todos os cards possíveis
 const ALL_ENVIRONMENTS = {
   COMERCIAL: {
     title: "Comercial",
-    description: "Análise de vendas, funis e performance da equipe."
+    description: "Análise de vendas, funis e performance da equipe.",
+    href: "/comercial" // Caminho para a nova página
   },
   FINANCEIRO: {
     title: "Financeiro",
-    description: "Visão consolidada das finanças e fluxo de caixa."
+    description: "Visão consolidada das finanças e fluxo de caixa.",
+    href: "/financeiro" // Futuro caminho
   },
   GENTE_E_GESTAO: {
     title: "Gente & Gestão",
-    description: "Painel de indicadores e gestão de colaboradores."
+    description: "Painel de indicadores e gestão de colaboradores.",
+    href: "/gente-e-gestao" // Futuro caminho
   }
 };
 
@@ -43,26 +49,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchPermissions = async () => {
-      // 1. Pega o usuário logado
       const { data: { user } } = await supabase.auth.getUser();
-
       if (user) {
-        // 2. Busca as permissões para esse usuário na tabela 'permissions'
         const { data, error } = await supabase
           .from('permissions')
           .select('environment')
           .eq('user_id', user.id);
-
         if (error) {
           console.error("Erro ao buscar permissões:", error);
         } else {
-          // 3. Armazena as permissões encontradas (ex: ['COMERCIAL'])
           setUserPermissions(data.map(p => p.environment));
         }
       }
       setLoading(false);
     };
-
     fetchPermissions();
   }, [supabase]);
 
@@ -93,11 +93,10 @@ export default function DashboardPage() {
           <p>Carregando permissões...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* 4. Mapeia as permissões do usuário e renderiza apenas os cards permitidos */}
             {userPermissions.map(permissionKey => {
               const env = ALL_ENVIRONMENTS[permissionKey];
               if (!env) return null;
-              return <EnvironmentCard key={env.title} title={env.title} description={env.description} />;
+              return <EnvironmentCard key={env.title} title={env.title} description={env.description} href={env.href} />;
             })}
           </div>
         )}
