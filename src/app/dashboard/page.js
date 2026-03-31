@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image'; // Importe o componente Image
+import Image from 'next/image';
 
 // Componente para um Card individual
 function EnvironmentCard({ title, description }) {
@@ -29,14 +29,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen w-full text-white">
-      {/* Cabeçalho -- ALTERAÇÃO AQUI ABAIXO */}
-      <header className="bg-black/20 p-4 flex justify-between items-center shadow-lg">
-        <div className="flex items-center gap-4"> {/* Container para agrupar logo e texto */}
+      {/* Cabeçalho */}
+      <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg"> {/* <-- ALTERAÇÃO AQUI */}
+        <div className="flex items-center gap-4">
           <Image
             src="/logo_acelerar_sidebar.png"
             alt="Logo Acelerar"
-            width={80} // Ajuste o tamanho conforme necessário
-            height={80}
+            width={70}
+            height={70}
           />
           <h1 className="text-2xl font-bold text-acelerar-light-blue">
             Portal Acelerar
