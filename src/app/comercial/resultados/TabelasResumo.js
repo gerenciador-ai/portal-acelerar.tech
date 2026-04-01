@@ -1,33 +1,31 @@
 "use client";
 
-// --- DADOS FICTÍCIOS PARA O TESTE ---
-const FAKE_VENDAS = [
-    { id: 1, data: '2026-03-15T12:00:00Z', cliente: 'Cliente Fictício A (Venda)', produto: 'Produto X', vendedor: 'Vendedor 1', mrr: 1500 },
-    { id: 2, data: '2026-02-20T12:00:00Z', cliente: 'Cliente Fictício B (Venda)', produto: 'Produto Y', vendedor: 'Vendedor 2', mrr: 850 },
-    { id: 3, data: '2026-01-10T12:00:00Z', cliente: 'Cliente Fictício C (Venda)', produto: 'Produto X', vendedor: 'Vendedor 1', mrr: 2200 },
-];
-
-const FAKE_CANCELAMENTOS = [
-    { id: 4, data: '2026-03-05T12:00:00Z', cliente: 'Cliente Fictício D (Churn)', produto: 'Produto Z', vendedor: 'N/A', mrr: 990 },
-];
-// --- FIM DOS DADOS FICTÍCIOS ---
-
-
-// Função para formatar valores monetários
 const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Componente para uma única linha da tabela
-const TableRow = ({ deal, isVenda }) => (
-    <tr className="border-b border-white/10 hover:bg-white/5">
-        <td className="p-2 text-xs">{new Date(deal.data).toLocaleDateString('pt-BR')}</td>
-        <td className="p-2 text-sm font-medium">{deal.cliente}</td>
-        <td className="p-2 text-xs hidden md:table-cell">{deal.produto}</td>
-        <td className="p-2 text-xs hidden lg:table-cell">{deal.vendedor}</td>
-        <td className={`p-2 text-sm font-bold ${isVenda ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(deal.mrr)}</td>
-    </tr>
-);
+const TableRow = ({ deal, isVenda }) => {
+    // BLINDAGEM: Garante que 'deal' e 'deal.data' existam antes de tentar usá-los.
+    if (!deal || !deal.data) {
+        return (
+            <tr>
+                <td colSpan="5" className="p-2 text-xs text-yellow-400">Registro com dados inválidos.</td>
+            </tr>
+        );
+    }
+    
+    // Usa a data de churn se existir, senão a data principal.
+    const displayDate = deal.data_churn || deal.data;
 
-// Componente para a tabela inteira
+    return (
+        <tr className="border-b border-white/10 hover:bg-white/5">
+            <td className="p-2 text-xs">{new Date(displayDate).toLocaleDateString('pt-BR')}</td>
+            <td className="p-2 text-sm font-medium">{deal.cliente || 'N/A'}</td>
+            <td className="p-2 text-xs hidden md:table-cell">{deal.produto || 'N/A'}</td>
+            <td className="p-2 text-xs hidden lg:table-cell">{deal.vendedor || 'N/A'}</td>
+            <td className={`p-2 text-sm font-bold ${isVenda ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(deal.mrr)}</td>
+        </tr>
+    );
+};
+
 const ResumoTable = ({ title, deals, isVenda }) => (
     <div className="bg-white/5 p-4 rounded-lg flex-grow flex flex-col">
         <h3 className="text-white font-bold mb-3">{title}</h3>
@@ -43,8 +41,8 @@ const ResumoTable = ({ title, deals, isVenda }) => (
                     </tr>
                 </thead>
                 <tbody>
-                    {deals.length > 0 ? (
-                        deals.map(deal => <TableRow key={deal.id} deal={deal} isVenda={isVenda} />)
+                    {deals && deals.length > 0 ? (
+                        deals.map((deal, index) => <TableRow key={deal.id || index} deal={deal} isVenda={isVenda} />)
                     ) : (
                         <tr>
                             <td colSpan="5" className="text-center p-4 text-sm text-white/50">Nenhum registro no período.</td>
@@ -56,17 +54,19 @@ const ResumoTable = ({ title, deals, isVenda }) => (
     </div>
 );
 
-// O componente principal agora IGNORA as props e usa os dados FAKE
-export default function TabelasResumo({ vendas, cancelamentos }) {
-    // A verificação original é ignorada para o teste.
-    // if (!vendas || !cancelamentos) {
-    //     return <div className="text-center text-white/50 col-span-full p-10">Carregando dados das tabelas...</div>;
-    // }
+export default function TabelasResumo({ tableData }) {
+    // A verificação crucial: esperamos o objeto tableData.
+    if (!tableData) {
+        return <div className="text-center text-white/50 col-span-full p-10">Aguardando dados para as tabelas...</div>;
+    }
+
+    // Desestruturamos os dados aqui dentro, com segurança.
+    const { vendas, cancelados } = tableData;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 h-96">
-            <ResumoTable title="Resumo de Vendas (TESTE)" deals={FAKE_VENDAS} isVenda={true} />
-            <ResumoTable title="Resumo de Cancelamentos (TESTE)" deals={FAKE_CANCELAMENTOS} isVenda={false} />
+            <ResumoTable title="Resumo de Vendas (Dados Reais)" deals={vendas} isVenda={true} />
+            <ResumoTable title="Resumo de Cancelamentos (Dados Reais)" deals={cancelados} isVenda={false} />
         </div>
     );
 }
