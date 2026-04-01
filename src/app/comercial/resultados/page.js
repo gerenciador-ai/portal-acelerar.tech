@@ -56,7 +56,7 @@ export default function ResultadosPage() {
                 const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
                 setAllDeals(dealsComData);
             } catch (err) {
-                setError(err.message);
+                setError(err);
             } finally {
                 setLoading(false);
             }
@@ -110,6 +110,7 @@ export default function ResultadosPage() {
             clientesCancelados: cancelados.length,
             carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
+            // A LINHA ABAIXO É A CORREÇÃO. USA 'cancelados.length' e não 'cancelamentos.length'
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
 
