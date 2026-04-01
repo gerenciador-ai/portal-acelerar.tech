@@ -17,10 +17,13 @@ export default function ComercialLayout({ children }) {
     return (
         <div className="min-h-screen w-full bg-acelerar-dark-blue text-white flex flex-col">
             {/* Cabeçalho Fixo no Topo */}
-            <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg shrink-0">
+            <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg shrink-0 relative h-14"> {/* Aumenta um pouco a altura base e torna relativo */}
                 <div className="flex items-center gap-4">
-                    <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={40} height={40} />
-                    <h1 className="text-xl font-bold text-acelerar-light-blue">Comercial</h1>
+                    {/* LOGO CORRIGIDO: Posicionamento absoluto para "vazar" da barra */}
+                    <div className="absolute top-0 left-2">
+                         <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={80} height={80} className="drop-shadow-lg" />
+                    </div>
+                    <h1 className="text-xl font-bold text-acelerar-light-blue ml-20">Comercial</h1> {/* Adiciona margem para não ficar atrás do logo */}
                 </div>
                 <nav className="flex items-center gap-2">
                     <NavLink href="/comercial/resultados">📊 Resultados</NavLink>
