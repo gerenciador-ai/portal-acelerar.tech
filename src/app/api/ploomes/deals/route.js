@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server';
 const PLOOMES_API_URL = 'https://api2.ploomes.com';
 const API_KEY = process.env.PLOOMES_API_KEY;
 
-// IDs dos funis e campos, como mapeamos anteriormente
 const PIPELINES = {
-    'VMC Tech': { vendas: 110064393, churn: 110065017 },
-    'Victec': { vendas: 110023047, churn: 110042202 }
+    'VMC Tech': { vendas: 110064393, churn: 110065017, churnStageCancelado: 110065019 },
+    'Victec': { vendas: 110023047, churn: 110042202, churnStageCancelado: 110042204 } // Assumindo o ID do estágio de cancelado da Victec
 };
 const FIELDS = {
     VENDEDOR: 110777788, SDR: 110777789, MRR: 110778108,
@@ -14,7 +13,6 @@ const FIELDS = {
     ADESAO_R: 111431861, DATA_ATIVACAO: 110778114, DATA_CANCELAMENTO: 111417137
 };
 
-// Função auxiliar para buscar dados do Ploomes
 async function fetchPloomes(endpoint ) {
     const url = `${PLOOMES_API_URL}${endpoint}`;
     const response = await fetch(url, {
@@ -27,22 +25,19 @@ async function fetchPloomes(endpoint ) {
     return data.value;
 }
 
-// Função para "limpar" e "traduzir" um negócio do Ploomes
 function processDeal(deal, type) {
     const props = deal.OtherProperties || [];
     const getProp = (id) => props.find(p => p.FieldId === id);
 
-    const mrr = getProp(FIELDS.MRR)?.DecimalValue || 0;
-    const adesao = (getProp(FIELDS.ADESAO_S)?.DecimalValue || 0) + (getProp(FIELDS.ADESAO_R)?.DecimalValue || 0);
-    
     let date;
     if (type === 'Venda') {
-        // Prioriza a data de ativação, senão a data de finalização do negócio
         date = getProp(FIELDS.DATA_ATIVACAO)?.DateTimeValue || deal.FinishDate;
     } else { // Churn
-        // Prioriza a data de cancelamento, senão a data de finalização do negócio
         date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate;
     }
+    
+    // Se mesmo assim a data for nula (não deveria acontecer com a nova busca), retornamos null para filtrar depois
+    if (!date) return null;
 
     return {
         id: deal.Id,
@@ -52,12 +47,10 @@ function processDeal(deal, type) {
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A',
         produto: getProp(FIELDS.PRODUTO)?.ObjectValueName || getProp(FIELDS.PRODUTO)?.ValueName || 'Sittax Simples',
-        mrr: mrr,
-        adesao: adesao,
+        mrr: getProp(FIELDS.MRR)?.DecimalValue || 0,
+        adesao: (getProp(FIELDS.ADESAO_S)?.DecimalValue || 0) + (getProp(FIELDS.ADESAO_R)?.DecimalValue || 0),
         upsell: getProp(FIELDS.UPSELL)?.DecimalValue || 0,
         status: type,
-        // Adicionamos o StageId para identificar cancelados no funil de churn
-        stageId: deal.StageId,
     };
 }
 
@@ -66,28 +59,29 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Chave da API do Ploomes não configurada.' }, { status: 500 });
     }
 
-    // Pega a empresa selecionada da URL (ex: /api/ploomes/deals?empresa=VMC%20Tech)
     const { searchParams } = new URL(request.url);
-    const empresa = searchParams.get('empresa') || 'VMC Tech'; // Padrão para VMC Tech
-
+    const empresa = searchParams.get('empresa') || 'VMC Tech';
     const config = PIPELINES[empresa];
+
     if (!config) {
         return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
     }
 
     try {
-        // Busca os negócios de Vendas e Churn em paralelo para mais performance
+        // **BUSCA CIRÚRGICA, CONFORME SUA LÓGICA**
+        const endpointVendas = `/Deals?$filter=PipelineId eq ${config.vendas} and StatusId eq 2&$expand=OtherProperties,Contact`;
+        const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn} and StageId eq ${config.churnStageCancelado}&$expand=OtherProperties,Contact`;
+
         const [vendasData, churnData] = await Promise.all([
-            fetchPloomes(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact`),
-            fetchPloomes(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact`)
+            fetchPloomes(endpointVendas),
+            fetchPloomes(endpointChurn)
         ]);
 
-        // Processa e "limpa" os dados de cada lista
         const processedVendas = vendasData.map(deal => processDeal(deal, 'Venda'));
         const processedChurn = churnData.map(deal => processDeal(deal, 'Churn'));
 
-        // Combina tudo em uma única lista de dados limpos
-        const allDeals = [...processedVendas, ...processedChurn];
+        // Combina e remove quaisquer nulos que possam ter escapado (dupla segurança)
+        const allDeals = [...processedVendas, ...processedChurn].filter(Boolean);
 
         return NextResponse.json({ value: allDeals });
 
