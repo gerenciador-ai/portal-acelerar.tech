@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import ClientOnlyWrapper from './ClientOnlyWrapper'; // Importar o wrapper
-import GraficosResultados from './GraficosResultados'; // Importar diretamente
-import TabelasResumo from './TabelasResumo';       // Importar diretamente
+import ClientOnlyWrapper from './ClientOnlyWrapper';
+import GraficosResultados from './GraficosResultados';
+import TabelasResumo from './TabelasResumo';
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -144,7 +144,7 @@ export default function ResultadosPage() {
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
-            tableData: { vendas, cancelamentos }
+            tableData: { vendas, cancelados }
         };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
