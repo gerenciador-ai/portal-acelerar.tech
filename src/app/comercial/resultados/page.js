@@ -97,23 +97,9 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
+        // LÓGICA SIMPLIFICADA: Apenas filtramos, sem lógicas complexas.
         const vendas = dealsFiltrados.filter(d => d.status === 'Venda');
-        
-        // LÓGICA CORRIGIDA PARA ENRIQUECER OS DADOS DE CHURN
-        const cancelados = dealsFiltrados
-            .filter(d => d.status === 'Churn')
-            .map(churnDeal => {
-                // Para cada churn, encontre a venda original do mesmo cliente
-                const vendaOriginal = allDeals.find(vendaDeal => 
-                    vendaDeal.status === 'Venda' && 
-                    vendaDeal.cliente_id === churnDeal.cliente_id
-                );
-                // Retorna o deal de churn, mas com o SDR da venda original (se encontrada)
-                return {
-                    ...churnDeal,
-                    sdr: vendaOriginal ? vendaOriginal.sdr : churnDeal.sdr, // Pega o SDR da venda
-                };
-            });
+        const cancelados = dealsFiltrados.filter(d => d.status === 'Churn');
 
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
