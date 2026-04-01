@@ -89,7 +89,7 @@ export default function ResultadosPage() {
     const { kpis, chartData, tableData } = useMemo(() => {
         if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
-        const deals = allDeals.filter(d =>
+        const dealsFiltrados = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
             (selectedProduto === 'Todos' || d.produto === selectedProduto) &&
@@ -97,8 +97,24 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
-        const vendas = deals.filter(d => d.status === 'Venda');
-        const cancelados = deals.filter(d => d.status === 'Churn');
+        const vendas = dealsFiltrados.filter(d => d.status === 'Venda');
+        
+        // LÓGICA DE ENRIQUECIMENTO DOS DADOS DE CHURN
+        const cancelados = dealsFiltrados
+            .filter(d => d.status === 'Churn')
+            .map(churnDeal => {
+                // Para cada churn, encontre a venda original do mesmo cliente
+                const vendaOriginal = allDeals.find(vendaDeal => 
+                    vendaDeal.status === 'Venda' && 
+                    vendaDeal.cliente_id === churnDeal.cliente_id
+                );
+                // Retorna o deal de churn, mas com o SDR da venda original (se encontrada)
+                return {
+                    ...churnDeal,
+                    sdr: vendaOriginal ? vendaOriginal.sdr : churnDeal.sdr, // Pega o SDR da venda
+                };
+            });
+
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const kpisCalculados = {
@@ -114,7 +130,7 @@ export default function ResultadosPage() {
 
         const labels = MESES_ORDEM.filter(mes => selectedMeses.includes(mes));
         const monthlyData = labels.map(mes => {
-            const dealsDoMes = deals.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
+            const dealsDoMes = dealsFiltrados.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
             const vendasDoMes = dealsDoMes.filter(d => d.status === 'Venda');
             const churnDoMes = dealsDoMes.filter(d => d.status === 'Churn');
             return {
@@ -195,7 +211,6 @@ export default function ResultadosPage() {
                             <GraficosResultados chartData={chartData} />
                         </div>
 
-                        {/* A FORMA CORRETA E SEGURA DE PASSAR OS DADOS */}
                         <TabelasResumo tableData={tableData} />
                     </>
                 )}
