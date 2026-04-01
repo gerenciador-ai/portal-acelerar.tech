@@ -1,5 +1,18 @@
 "use client";
 
+// --- DADOS FICTÍCIOS PARA O TESTE ---
+const FAKE_VENDAS = [
+    { id: 1, data: '2026-03-15T12:00:00Z', cliente: 'Cliente Fictício A (Venda)', produto: 'Produto X', vendedor: 'Vendedor 1', mrr: 1500 },
+    { id: 2, data: '2026-02-20T12:00:00Z', cliente: 'Cliente Fictício B (Venda)', produto: 'Produto Y', vendedor: 'Vendedor 2', mrr: 850 },
+    { id: 3, data: '2026-01-10T12:00:00Z', cliente: 'Cliente Fictício C (Venda)', produto: 'Produto X', vendedor: 'Vendedor 1', mrr: 2200 },
+];
+
+const FAKE_CANCELAMENTOS = [
+    { id: 4, data: '2026-03-05T12:00:00Z', cliente: 'Cliente Fictício D (Churn)', produto: 'Produto Z', vendedor: 'N/A', mrr: 990 },
+];
+// --- FIM DOS DADOS FICTÍCIOS ---
+
+
 // Função para formatar valores monetários
 const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -43,15 +56,17 @@ const ResumoTable = ({ title, deals, isVenda }) => (
     </div>
 );
 
+// O componente principal agora IGNORA as props e usa os dados FAKE
 export default function TabelasResumo({ vendas, cancelamentos }) {
-    if (!vendas || !cancelamentos) {
-        return <div className="text-center text-white/50 col-span-full p-10">Carregando dados das tabelas...</div>;
-    }
+    // A verificação original é ignorada para o teste.
+    // if (!vendas || !cancelamentos) {
+    //     return <div className="text-center text-white/50 col-span-full p-10">Carregando dados das tabelas...</div>;
+    // }
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 h-96">
-            <ResumoTable title="Resumo de Vendas" deals={vendas} isVenda={true} />
-            <ResumoTable title="Resumo de Cancelamentos (Churn)" deals={cancelamentos} isVenda={false} />
+            <ResumoTable title="Resumo de Vendas (TESTE)" deals={FAKE_VENDAS} isVenda={true} />
+            <ResumoTable title="Resumo de Cancelamentos (TESTE)" deals={FAKE_CANCELAMENTOS} isVenda={false} />
         </div>
     );
 }
