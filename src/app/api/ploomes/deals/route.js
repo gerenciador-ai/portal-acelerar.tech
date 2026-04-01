@@ -13,19 +13,38 @@ const FIELDS = {
     ADESAO_R: 111431861, DATA_ATIVACAO: 110778114, DATA_CANCELAMENTO: 111417137
 };
 
-async function fetchPloomes(endpoint ) {
-    const url = `${PLOOMES_API_URL}${endpoint}`;
-    const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'User-Key': API_KEY, 'Content-Type': 'application/json' },
-        cache: 'no-store',
-    });
-    if (!response.ok) {
-        console.error(`Ploomes API error for ${url}: ${response.statusText}`);
-        return [];
+async function fetchAllPages(endpoint ) {
+    let allData = [];
+    let skip = 0;
+    const top = 250; // Número de itens por página
+    let hasMore = true;
+
+    while (hasMore) {
+        const paginatedEndpoint = `${endpoint}&$skip=${skip}&$top=${top}`;
+        const url = `${PLOOMES_API_URL}${paginatedEndpoint}`;
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'User-Key': API_KEY, 'Content-Type': 'application/json' },
+            cache: 'no-store',
+        });
+
+        if (!response.ok) {
+            console.error(`Ploomes API error for ${url}: ${response.statusText}`);
+            hasMore = false;
+            continue;
+        }
+
+        const data = await response.json();
+        const values = data.value;
+        
+        if (values && values.length > 0) {
+            allData = allData.concat(values);
+            skip += top;
+        } else {
+            hasMore = false;
+        }
     }
-    const data = await response.json();
-    return data.value;
+    return allData;
 }
 
 function processDeal(deal, type) {
@@ -33,9 +52,9 @@ function processDeal(deal, type) {
     const getProp = (id) => props.find(p => p.FieldId === id);
 
     let date;
-    if (type === 'Venda') {
+    if (deal.StatusId === 2) { // Venda Ganha
         date = getProp(FIELDS.DATA_ATIVACAO)?.DateTimeValue || deal.FinishDate;
-    } else { // Churn
+    } else if (type === 'Churn') { // Negócio do funil de Churn
         date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate;
     }
     
@@ -43,9 +62,9 @@ function processDeal(deal, type) {
 
     return {
         id: deal.Id,
-        contactId: deal.ContactId, // Importante para o cruzamento
+        contactId: deal.ContactId,
+        statusId: deal.StatusId,
         cliente: deal.Title,
-        cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date),
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A',
@@ -58,52 +77,50 @@ function processDeal(deal, type) {
 }
 
 export async function GET(request) {
-    if (!API_KEY) {
-        return NextResponse.json({ error: 'Chave da API do Ploomes não configurada.' }, { status: 500 });
-    }
+    if (!API_KEY) return NextResponse.json({ error: 'Chave da API do Ploomes não configurada.' }, { status: 500 });
 
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa') || 'VMC Tech';
     const config = PIPELINES[empresa];
 
-    if (!config) {
-        return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
-    }
+    if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
-        const endpointVendas = `/Deals?$filter=PipelineId eq ${config.vendas} and StatusId eq 2&$expand=OtherProperties,Contact`;
+        // **NOVA ESTRATÉGIA DE BUSCA**
+        // 1. Busca TODOS os negócios do funil de vendas para ter o histórico completo.
+        const endpointVendasFull = `/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact`;
+        // 2. Busca todos os negócios do funil de churn.
         const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact`;
 
-        const [vendasData, churnData] = await Promise.all([
-            fetchPloomes(endpointVendas),
-            fetchPloomes(endpointChurn)
+        const [vendasFullData, churnData] = await Promise.all([
+            fetchAllPages(endpointVendasFull),
+            fetchAllPages(endpointChurn)
         ]);
 
-        const processedVendas = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
+        const allVendasProcessed = vendasFullData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        // **LÓGICA DE CRUZAMENTO DE DADOS**
-        // 1. Criar um mapa de MRR por cliente a partir das vendas.
+        // **LÓGICA DE CRUZAMENTO REFEITA**
         const mrrMap = new Map();
-        for (const venda of processedVendas) {
-            if (venda.contactId) {
-                // Guarda o MRR mais recente para cada cliente
+        // Percorre TODAS as vendas (ganhas, perdidas, em andamento) para criar o mapa
+        for (const venda of allVendasProcessed) {
+            if (venda.contactId && venda.mrr > 0) {
+                // Guarda o MRR da venda, se ele existir
                 mrrMap.set(venda.contactId, venda.mrr);
             }
         }
 
-        // 2. Atribuir o MRR encontrado aos negócios de churn.
         processedChurn = processedChurn.map(churn => {
             if (churn.contactId && mrrMap.has(churn.contactId)) {
-                // Se o MRR do churn é 0, usa o valor do mapa.
-                if (churn.mrr === 0) {
-                    return { ...churn, mrr: mrrMap.get(churn.contactId) };
-                }
+                return { ...churn, mrr: mrrMap.get(churn.contactId) };
             }
             return churn;
         });
 
-        const allDeals = [...processedVendas, ...processedChurn];
+        // Agora, filtramos apenas os negócios que nos interessam para o resultado final
+        const vendasGanha = allVendasProcessed.filter(v => v.statusId === 2);
+        
+        const allDeals = [...vendasGanha, ...processedChurn];
 
         return NextResponse.json({ value: allDeals });
 
