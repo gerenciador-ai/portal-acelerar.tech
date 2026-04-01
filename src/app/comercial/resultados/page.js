@@ -86,7 +86,9 @@ export default function ResultadosPage() {
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
     const { kpis, chartData, tableData } = useMemo(() => {
-        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
+        if (loading || !allDeals || allDeals.length === 0) {
+            return { kpis: {}, chartData: null, tableData: { vendas: [], cancelados: [] } };
+        }
         
         const deals = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
@@ -96,10 +98,11 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
-        const vendas = deals.filter(d => d.status === 'Venda');
-        const cancelados = deals.filter(d => d.status === 'Churn');
-        const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
-        const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
+        const vendas = deals.filter(d => d.status === 'Venda') || []; // GARANTE QUE SEJA UM ARRAY
+        const cancelados = deals.filter(d => d.status === 'Churn') || []; // GARANTE QUE SEJA UM ARRAY
+        
+        const mrrConquistado = vendas.reduce((sum, d) => sum + (d.mrr || 0), 0);
+        const mrrPerdido = cancelados.reduce((sum, d) => sum + (d.mrr || 0), 0);
         
         const kpisCalculados = {
             mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
@@ -110,7 +113,6 @@ export default function ResultadosPage() {
             clientesCancelados: cancelados.length,
             carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
-            // A LINHA ABAIXO É A CORREÇÃO. USA 'cancelados.length' e não 'cancelamentos.length'
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
 
