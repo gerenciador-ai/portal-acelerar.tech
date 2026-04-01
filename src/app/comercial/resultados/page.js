@@ -153,7 +153,7 @@ export default function ResultadosPage() {
             {/* Conteúdo Principal */}
             <div className="flex-1 p-8 overflow-y-auto">
                 <div className="flex items-center gap-4 mb-6">
-                    <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={120} height={40} style={{ objectFit: 'contain' }} />
+                    <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={120} height={60} style={{ objectFit: 'contain' }} />
                     <h1 className="text-3xl font-bold text-white">Resultados (Performance)</h1>
                 </div>
                 {loading ? <p>Carregando KPIs...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
