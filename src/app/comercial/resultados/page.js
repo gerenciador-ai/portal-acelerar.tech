@@ -1,12 +1,20 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image'; // Importar o componente Image
 
-// Componentes movidos para dentro para simplicidade
-function KpiCard({ title, value, color = 'text-acelerar-light-blue' }) {
+// Componente de KPI atualizado para incluir o sub-valor (percentual)
+function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
-        <div className="bg-white/10 p-4 rounded-lg text-center">
-            <div className="text-xs uppercase text-white/60 truncate">{title}</div>
-            <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
+        <div className="bg-white/10 p-4 rounded-lg text-center flex flex-col justify-between">
+            <div>
+                <div className="text-xs uppercase text-white/60 truncate">{title}</div>
+                <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
+            </div>
+            {subValue && (
+                <div className="text-xs font-bold mt-2 text-red-400/80">
+                    {subValue}
+                </div>
+            )}
         </div>
     );
 }
@@ -21,6 +29,9 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
         </div>
     );
 }
+
+// Mapa para ordenar os meses corretamente
+const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 export default function ResultadosPage() {
     const [allDeals, setAllDeals] = useState([]);
@@ -63,7 +74,6 @@ export default function ResultadosPage() {
         setAnos(anosUnicos);
         if (!anosUnicos.includes(selectedAno)) setSelectedAno(anosUnicos[0] || new Date().getFullYear());
         
-        // Lógica corrigida para fixar "Todos" no início
         const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(allDeals.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
         setProdutos(getUniqueAndSorted('produto'));
         setVendedores(getUniqueAndSorted('vendedor'));
@@ -73,7 +83,10 @@ export default function ResultadosPage() {
     useEffect(() => {
         if (allDeals.length === 0 || !selectedAno) return;
         const mesesDoAno = [...new Set(allDeals.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
-        const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', ''));
+        // LÓGICA DE ORDENAÇÃO DOS MESES
+        const mesesNomes = mesesDoAno
+            .map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', ''))
+            .sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
         setMeses(mesesNomes);
         setSelectedMeses(mesesNomes);
     }, [selectedAno, allDeals]);
@@ -101,27 +114,32 @@ export default function ResultadosPage() {
         const ticketMedio = clientesFechados > 0 ? mrrConquistado / clientesFechados : 0;
         const adesaoTotal = vendas.reduce((sum, d) => sum + d.adesao, 0);
         const clientesCancelados = cancelados.length;
-        const carteiraAtiva = allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn' && d.stageId === 110065019).length;
-        return { kpis: { mrrConquistado, mrrPerdido, mrrNet, totalUpsell, ticketMedio, adesaoTotal, clientesFechados, clientesCancelados, carteiraAtiva } };
+        const carteiraAtiva = allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length;
+        
+        // CÁLCULO DOS PERCENTUAIS
+        const percentualMrrPerdido = mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0;
+        const percentualClientesCancelados = clientesFechados > 0 ? (clientesCancelados / clientesFechados) * 100 : 0;
+
+        return { kpis: { mrrConquistado, mrrPerdido, mrrNet, totalUpsell, ticketMedio, adesaoTotal, clientesFechados, clientesCancelados, carteiraAtiva, percentualMrrPerdido, percentualClientesCancelados } };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
+    const logoEmpresa = selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png';
 
     return (
         <div className="flex h-full">
             {/* Sidebar de Filtros */}
-            <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4">
+            <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} disabled={loading} />
                 <FilterSelect label="Ano" value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} options={anos} disabled={loading || anos.length === 0} />
                 
-                {/* Novo Menu de Meses com Checkboxes */}
                 <div>
                     <label className="text-xs text-white/70 block mb-1 font-bold uppercase">Meses</label>
                     <div className="bg-acelerar-dark-blue p-2 rounded-md border border-white/20 max-h-48 overflow-y-auto">
                         {meses.map(mes => (
                             <label key={mes} className="flex items-center gap-2 p-1 rounded hover:bg-white/10 cursor-pointer">
                                 <input type="checkbox" checked={selectedMeses.includes(mes)} onChange={() => handleMesChange(mes)} className="form-checkbox bg-acelerar-dark-blue border-white/30 text-acelerar-light-blue focus:ring-acelerar-light-blue" />
-                                <span>{mes}</span>
+                                <span>{mes.charAt(0).toUpperCase() + mes.slice(1)}</span>
                             </label>
                         ))}
                     </div>
@@ -134,18 +152,21 @@ export default function ResultadosPage() {
 
             {/* Conteúdo Principal */}
             <div className="flex-1 p-8 overflow-y-auto">
-                <h1 className="text-3xl font-bold text-white mb-6">Resultados (Performance)</h1>
+                <div className="flex items-center gap-4 mb-6">
+                    <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={120} height={40} style={{ objectFit: 'contain' }} />
+                    <h1 className="text-3xl font-bold text-white">Resultados (Performance)</h1>
+                </div>
                 {loading ? <p>Carregando KPIs...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
                     <>
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
                             <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
-                            <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" />
+                            <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" subValue={`${kpis.percentualMrrPerdido.toFixed(1)}% do MRR`} />
                             <KpiCard title="MRR Ativo (Net)" value={formatCurrency(kpis.mrrNet)} />
                             <KpiCard title="Total Upsell" value={formatCurrency(kpis.totalUpsell)} />
                             <KpiCard title="Ticket Médio" value={formatCurrency(kpis.ticketMedio)} />
                             <KpiCard title="Adesão Total" value={formatCurrency(kpis.adesaoTotal)} />
                             <KpiCard title="Clientes Fechados" value={kpis.clientesFechados || 0} />
-                            <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" />
+                            <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
                             <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
                         </div>
                         <div className="bg-white/10 p-6 rounded-lg">
