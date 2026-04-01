@@ -1,9 +1,12 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import ClientOnlyWrapper from './ClientOnlyWrapper';
-import GraficosResultados from './GraficosResultados';
-import TabelasResumo from './TabelasResumo';
+import dynamic from 'next/dynamic';
+
+// Import dinâmico para os componentes de visualização
+const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
+const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando dados das tabelas...</div> });
+
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -86,9 +89,7 @@ export default function ResultadosPage() {
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
     const { kpis, chartData, tableData } = useMemo(() => {
-        if (loading || !allDeals || allDeals.length === 0) {
-            return { kpis: {}, chartData: null, tableData: { vendas: [], cancelados: [] } };
-        }
+        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
         const deals = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
@@ -98,19 +99,16 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
-        const vendas = deals.filter(d => d.status === 'Venda') || []; // GARANTE QUE SEJA UM ARRAY
-        const cancelados = deals.filter(d => d.status === 'Churn') || []; // GARANTE QUE SEJA UM ARRAY
-        
-        const mrrConquistado = vendas.reduce((sum, d) => sum + (d.mrr || 0), 0);
-        const mrrPerdido = cancelados.reduce((sum, d) => sum + (d.mrr || 0), 0);
-        
+        const vendas = deals.filter(d => d.status === 'Venda');
+        const cancelados = deals.filter(d => d.status === 'Churn');
+        const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
+        const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const kpisCalculados = {
             mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
-            totalUpsell: vendas.reduce((sum, d) => sum + (d.upsell || 0), 0),
+            totalUpsell: vendas.reduce((sum, d) => sum + d.upsell, 0),
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
-            adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
-            clientesFechados: vendas.length,
-            clientesCancelados: cancelados.length,
+            adesaoTotal: vendas.reduce((sum, d) => sum + d.adesao, 0),
+            clientesFechados: vendas.length, clientesCancelados: cancelados.length,
             carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
@@ -149,7 +147,7 @@ export default function ResultadosPage() {
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
-            tableData: { vendas, cancelados }
+            tableData: { vendas, cancelados } // Passando os dados para as tabelas
         };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
@@ -181,30 +179,28 @@ export default function ResultadosPage() {
                     <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={180} height={60} style={{ objectFit: 'contain' }} />
                     <h1 className="text-3xl font-bold text-white">Resultados (Performance)</h1>
                 </div>
-                
-                <ClientOnlyWrapper>
-                    {loading ? <div className="text-center p-10 text-white/50">Carregando dados...</div> : error ? <p className="text-red-400">Erro: {error.message}</p> : (
-                        <>
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
-                                <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
-                                <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" subValue={`${kpis.percentualMrrPerdido.toFixed(1)}% do MRR`} />
-                                <KpiCard title="MRR Ativo (Net)" value={formatCurrency(kpis.mrrNet)} />
-                                <KpiCard title="Total Upsell" value={formatCurrency(kpis.totalUpsell)} />
-                                <KpiCard title="Ticket Médio" value={formatCurrency(kpis.ticketMedio)} />
-                                <KpiCard title="Adesão Total" value={formatCurrency(kpis.adesaoTotal)} />
-                                <KpiCard title="Clientes Fechados" value={kpis.clientesFechados || 0} />
-                                <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
-                                <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
-                            </div>
-                            
-                            <div className="mt-8">
-                                <GraficosResultados chartData={chartData} />
-                            </div>
+                {loading ? <p>Carregando...</p> : error ? <p className="text-red-400">Erro: {error.message}</p> : (
+                    <>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
+                            <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
+                            <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" subValue={`${kpis.percentualMrrPerdido.toFixed(1)}% do MRR`} />
+                            <KpiCard title="MRR Ativo (Net)" value={formatCurrency(kpis.mrrNet)} />
+                            <KpiCard title="Total Upsell" value={formatCurrency(kpis.totalUpsell)} />
+                            <KpiCard title="Ticket Médio" value={formatCurrency(kpis.ticketMedio)} />
+                            <KpiCard title="Adesão Total" value={formatCurrency(kpis.adesaoTotal)} />
+                            <KpiCard title="Clientes Fechados" value={kpis.clientesFechados || 0} />
+                            <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
+                            <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
+                        </div>
+                        
+                        <div className="mt-8">
+                            <GraficosResultados chartData={chartData} />
+                        </div>
 
-                            <TabelasResumo tableData={tableData} />
-                        </>
-                    )}
-                </ClientOnlyWrapper>
+                        {/* ESTA É A LINHA QUE CAUSAVA O PROBLEMA */}
+                        {tableData && <TabelasResumo vendas={tableData.vendas} cancelamentos={tableData.cancelamentos} />}
+                    </>
+                )}
             </main>
         </div>
     );
