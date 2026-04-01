@@ -198,7 +198,7 @@ export default function ResultadosPage() {
                         </div>
 
                         {/* ADICIONANDO AS TABELAS AQUI */}
-                        {tableData && <TabelasResumo vendas={tableData.vendas} cancelamentos={tableData.cancelamentos} />}
+                        <TabelasResumo tableData={tableData} />
                     </>
                 )}
             </main>
