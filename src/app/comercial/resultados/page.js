@@ -1,12 +1,9 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
-
-// Import dinâmico para os componentes de visualização
-const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
-const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
-
+import ClientOnlyWrapper from './ClientOnlyWrapper'; // Importar o wrapper
+import GraficosResultados from './GraficosResultados'; // Importar diretamente
+import TabelasResumo from './TabelasResumo';       // Importar diretamente
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -147,7 +144,7 @@ export default function ResultadosPage() {
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
-            tableData: { vendas, cancelados } // Passando os dados para as tabelas
+            tableData: { vendas, cancelamentos }
         };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
@@ -179,28 +176,30 @@ export default function ResultadosPage() {
                     <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={180} height={60} style={{ objectFit: 'contain' }} />
                     <h1 className="text-3xl font-bold text-white">Resultados (Performance)</h1>
                 </div>
-                {loading ? <p>Carregando...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
-                    <>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
-                            <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
-                            <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" subValue={`${kpis.percentualMrrPerdido.toFixed(1)}% do MRR`} />
-                            <KpiCard title="MRR Ativo (Net)" value={formatCurrency(kpis.mrrNet)} />
-                            <KpiCard title="Total Upsell" value={formatCurrency(kpis.totalUpsell)} />
-                            <KpiCard title="Ticket Médio" value={formatCurrency(kpis.ticketMedio)} />
-                            <KpiCard title="Adesão Total" value={formatCurrency(kpis.adesaoTotal)} />
-                            <KpiCard title="Clientes Fechados" value={kpis.clientesFechados || 0} />
-                            <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
-                            <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
-                        </div>
-                        
-                        <div className="mt-8">
-                            <GraficosResultados chartData={chartData} />
-                        </div>
+                
+                <ClientOnlyWrapper>
+                    {loading ? <div className="text-center p-10 text-white/50">Carregando dados...</div> : error ? <p className="text-red-400">Erro: {error}</p> : (
+                        <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
+                                <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
+                                <KpiCard title="MRR Perdido" value={formatCurrency(kpis.mrrPerdido)} color="text-red-400" subValue={`${kpis.percentualMrrPerdido.toFixed(1)}% do MRR`} />
+                                <KpiCard title="MRR Ativo (Net)" value={formatCurrency(kpis.mrrNet)} />
+                                <KpiCard title="Total Upsell" value={formatCurrency(kpis.totalUpsell)} />
+                                <KpiCard title="Ticket Médio" value={formatCurrency(kpis.ticketMedio)} />
+                                <KpiCard title="Adesão Total" value={formatCurrency(kpis.adesaoTotal)} />
+                                <KpiCard title="Clientes Fechados" value={kpis.clientesFechados || 0} />
+                                <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
+                                <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
+                            </div>
+                            
+                            <div className="mt-8">
+                                <GraficosResultados chartData={chartData} />
+                            </div>
 
-                        {/* ADICIONANDO AS TABELAS AQUI */}
-                        <TabelasResumo tableData={tableData} />
-                    </>
-                )}
+                            <TabelasResumo tableData={tableData} />
+                        </>
+                    )}
+                </ClientOnlyWrapper>
             </main>
         </div>
     );
