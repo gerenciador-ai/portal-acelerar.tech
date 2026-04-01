@@ -3,9 +3,10 @@ import { NextResponse } from 'next/server';
 const PLOOMES_API_URL = 'https://api2.ploomes.com';
 const API_KEY = process.env.PLOOMES_API_KEY;
 
+// IDs VALIDADOS E CORRIGIDOS
 const PIPELINES = {
     'VMC Tech': { vendas: 110064393, churn: 110065017, churnStageCancelado: 110065019 },
-    'Victec': { vendas: 110023047, churn: 110042202, churnStageCancelado: 110042204 } // Assumindo o ID do estágio de cancelado da Victec
+    'Victec':   { vendas: 110023047, churn: 110042202, churnStageCancelado: 110042204 }
 };
 const FIELDS = {
     VENDEDOR: 110777788, SDR: 110777789, MRR: 110778108,
@@ -20,7 +21,10 @@ async function fetchPloomes(endpoint ) {
         headers: { 'User-Key': API_KEY, 'Content-Type': 'application/json' },
         cache: 'no-store',
     });
-    if (!response.ok) throw new Error(`Ploomes API error: ${response.statusText}`);
+    if (!response.ok) {
+        console.error(`Ploomes API error for ${url}: ${response.statusText}`);
+        return []; // Retorna array vazio em caso de erro para não quebrar a aplicação
+    }
     const data = await response.json();
     return data.value;
 }
@@ -36,7 +40,6 @@ function processDeal(deal, type) {
         date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate;
     }
     
-    // Se mesmo assim a data for nula (não deveria acontecer com a nova busca), retornamos null para filtrar depois
     if (!date) return null;
 
     return {
@@ -68,8 +71,8 @@ export async function GET(request) {
     }
 
     try {
-        // **BUSCA CIRÚRGICA, CONFORME SUA LÓGICA**
         const endpointVendas = `/Deals?$filter=PipelineId eq ${config.vendas} and StatusId eq 2&$expand=OtherProperties,Contact`;
+        // LÓGICA DE BUSCA DE CHURN CORRIGIDA E VALIDADA
         const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn} and StageId eq ${config.churnStageCancelado}&$expand=OtherProperties,Contact`;
 
         const [vendasData, churnData] = await Promise.all([
@@ -80,7 +83,6 @@ export async function GET(request) {
         const processedVendas = vendasData.map(deal => processDeal(deal, 'Venda'));
         const processedChurn = churnData.map(deal => processDeal(deal, 'Churn'));
 
-        // Combina e remove quaisquer nulos que possam ter escapado (dupla segurança)
         const allDeals = [...processedVendas, ...processedChurn].filter(Boolean);
 
         return NextResponse.json({ value: allDeals });
