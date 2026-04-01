@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image'; // Importar o componente Image
+import GraficosResultados from './GraficosResultados';
 
 // Componente de KPI atualizado para incluir o sub-valor (percentual)
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
@@ -169,8 +170,12 @@ export default function ResultadosPage() {
                             <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
                             <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
                         </div>
-                        <div className="bg-white/10 p-6 rounded-lg">
-                            <p className="text-white/70">Gráficos e tabelas de detalhamento aparecerão aqui.</p>
+                        <div className="mt-8">
+                            <GraficosResultados 
+                                deals={filteredDeals} 
+                                selectedMeses={selectedMeses} 
+                                selectedEmpresa={selectedEmpresa} 
+                            />
                         </div>
                     </>
                 )}
