@@ -100,12 +100,14 @@ export default function ResultadosPage() {
         const cancelados = deals.filter(d => d.status === 'Churn');
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
+        
         const kpisCalculados = {
             mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
-            totalUpsell: vendas.reduce((sum, d) => sum + d.upsell, 0),
+            totalUpsell: vendas.reduce((sum, d) => sum + (d.upsell || 0), 0),
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
-            adesaoTotal: vendas.reduce((sum, d) => sum + d.adesao, 0),
-            clientesFechados: vendas.length, clientesCancelados: cancelados.length,
+            adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
+            clientesFechados: vendas.length,
+            clientesCancelados: cancelados.length,
             carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
@@ -178,7 +180,7 @@ export default function ResultadosPage() {
                 </div>
                 
                 <ClientOnlyWrapper>
-                    {loading ? <div className="text-center p-10 text-white/50">Carregando dados...</div> : error ? <p className="text-red-400">Erro: {error}</p> : (
+                    {loading ? <div className="text-center p-10 text-white/50">Carregando dados...</div> : error ? <p className="text-red-400">Erro: {error.message}</p> : (
                         <>
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
                                 <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
