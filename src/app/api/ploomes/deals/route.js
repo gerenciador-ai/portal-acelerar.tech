@@ -43,6 +43,7 @@ function processDeal(deal, type) {
 
     return {
         id: deal.Id,
+        contactId: deal.ContactId, // Importante para o cruzamento
         cliente: deal.Title,
         cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date),
@@ -71,9 +72,6 @@ export async function GET(request) {
 
     try {
         const endpointVendas = `/Deals?$filter=PipelineId eq ${config.vendas} and StatusId eq 2&$expand=OtherProperties,Contact`;
-        
-        // **LÓGICA CORRIGIDA - IGUAL AO CÓDIGO ANTIGO**
-        // Busca todos os negócios do funil de Churn, sem filtrar por estágio.
         const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact`;
 
         const [vendasData, churnData] = await Promise.all([
@@ -81,10 +79,31 @@ export async function GET(request) {
             fetchPloomes(endpointChurn)
         ]);
 
-        const processedVendas = vendasData.map(deal => processDeal(deal, 'Venda'));
-        const processedChurn = churnData.map(deal => processDeal(deal, 'Churn'));
+        const processedVendas = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
+        let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        const allDeals = [...processedVendas, ...processedChurn].filter(Boolean);
+        // **LÓGICA DE CRUZAMENTO DE DADOS**
+        // 1. Criar um mapa de MRR por cliente a partir das vendas.
+        const mrrMap = new Map();
+        for (const venda of processedVendas) {
+            if (venda.contactId) {
+                // Guarda o MRR mais recente para cada cliente
+                mrrMap.set(venda.contactId, venda.mrr);
+            }
+        }
+
+        // 2. Atribuir o MRR encontrado aos negócios de churn.
+        processedChurn = processedChurn.map(churn => {
+            if (churn.contactId && mrrMap.has(churn.contactId)) {
+                // Se o MRR do churn é 0, usa o valor do mapa.
+                if (churn.mrr === 0) {
+                    return { ...churn, mrr: mrrMap.get(churn.contactId) };
+                }
+            }
+            return churn;
+        });
+
+        const allDeals = [...processedVendas, ...processedChurn];
 
         return NextResponse.json({ value: allDeals });
 
