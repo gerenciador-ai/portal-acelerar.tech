@@ -1,24 +1,18 @@
 "use client";
 import { useState } from 'react';
 
-// Função para formatar valores monetários
 const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Função para converter dados para CSV e iniciar o download
 const exportToCSV = (data, headers, filename) => {
     const csvRows = [];
-    // Adiciona os cabeçalhos
     csvRows.push(headers.map(h => h.label).join(';'));
 
-    // Adiciona as linhas de dados
     for (const row of data) {
         const values = headers.map(header => {
             const value = row[header.key] || '';
-            // Formata a data se for o caso
             if ((header.key === 'data' || header.key === 'data_churn') && value) {
                 return new Date(value).toLocaleDateString('pt-BR');
             }
-            // Limpa o valor para CSV (remove ponto e vírgula e quebras de linha)
             const cleanedValue = String(value).replace(/;/g, ',').replace(/\n/g, ' ');
             return cleanedValue;
         });
@@ -26,7 +20,7 @@ const exportToCSV = (data, headers, filename) => {
     }
 
     const csvString = csvRows.join('\n');
-    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // \uFEFF para BOM do Excel
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.setAttribute('download', filename);
@@ -35,7 +29,6 @@ const exportToCSV = (data, headers, filename) => {
     document.body.removeChild(link);
 };
 
-// Componente para a tabela inteira, agora com botão de exportar
 const ResumoTable = ({ title, deals, headers, filename, isVenda }) => (
     <div className="bg-white/5 p-4 rounded-lg flex-grow flex flex-col">
         <div className="flex justify-between items-center mb-3">
@@ -87,7 +80,7 @@ export default function TabelasResumo({ tableData }) {
 
     const headersVendas = [
         { key: 'data', label: 'Data', isDate: true },
-        { key: 'cnpj', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
+        { key: 'cnpj_cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO AQUI
         { key: 'cliente', label: 'Cliente' },
         { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
         { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
@@ -99,7 +92,7 @@ export default function TabelasResumo({ tableData }) {
 
     const headersCancelamentos = [
         { key: 'data_churn', label: 'Data Churn', isDate: true },
-        { key: 'cnpj', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
+        { key: 'cnpj_cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO AQUI
         { key: 'cliente', label: 'Cliente' },
         { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
         { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
@@ -108,7 +101,7 @@ export default function TabelasResumo({ tableData }) {
     ];
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 h-[32rem]"> {/* Aumentei a altura para acomodar mais linhas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 h-[32rem]">
             <ResumoTable title="Resumo de Vendas" deals={vendas} headers={headersVendas} filename="resumo_vendas.csv" isVenda={true} />
             <ResumoTable title="Resumo de Cancelamentos (Churn)" deals={cancelados} headers={headersCancelamentos} filename="resumo_cancelamentos.csv" isVenda={false} />
         </div>
