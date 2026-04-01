@@ -3,10 +3,8 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
-// Import dinâmico para os componentes de visualização
 const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
-const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando dados das tabelas...</div> });
-
+const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -105,9 +103,9 @@ export default function ResultadosPage() {
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const kpisCalculados = {
             mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
-            totalUpsell: vendas.reduce((sum, d) => sum + d.upsell, 0),
+            totalUpsell: vendas.reduce((sum, d) => sum + (d.upsell || 0), 0),
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
-            adesaoTotal: vendas.reduce((sum, d) => sum + d.adesao, 0),
+            adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
             clientesFechados: vendas.length, clientesCancelados: cancelados.length,
             carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
@@ -147,7 +145,7 @@ export default function ResultadosPage() {
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
-            tableData: { vendas, cancelados } // Passando os dados para as tabelas
+            tableData: { vendas, cancelados }
         };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
@@ -197,8 +195,8 @@ export default function ResultadosPage() {
                             <GraficosResultados chartData={chartData} />
                         </div>
 
-                        {/* ESTA É A LINHA QUE CAUSAVA O PROBLEMA */}
-                        {tableData && <TabelasResumo vendas={tableData.vendas} cancelamentos={tableData.cancelamentos} />}
+                        {/* A FORMA CORRETA E SEGURA DE PASSAR OS DADOS */}
+                        <TabelasResumo tableData={tableData} />
                     </>
                 )}
             </main>
