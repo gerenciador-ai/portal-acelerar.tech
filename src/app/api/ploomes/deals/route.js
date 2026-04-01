@@ -37,9 +37,11 @@ function processDeal(deal, type) {
     
     let date;
     if (type === 'Venda') {
-        date = getProp(FIELDS.DATA_ATIVACAO)?.DateTimeValue || deal.FinishDate || deal.CreateDate;
+        // Prioriza a data de ativação, senão a data de finalização do negócio
+        date = getProp(FIELDS.DATA_ATIVACAO)?.DateTimeValue || deal.FinishDate;
     } else { // Churn
-        date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate || deal.CreateDate;
+        // Prioriza a data de cancelamento, senão a data de finalização do negócio
+        date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate;
     }
 
     return {
