@@ -43,10 +43,13 @@ const ResumoTable = ({ title, deals, isVenda }) => (
     </div>
 );
 
-export default function TabelasResumo({ vendas, cancelamentos }) {
-    if (!vendas || !cancelamentos) {
-        return <div className="text-center text-white/50 col-span-full p-10">Carregando dados das tabelas...</div>;
+export default function TabelasResumo({ tableData }) {
+    // Agora verificamos o objeto pai. Se ele for nulo, esperamos.
+    if (!tableData) {
+        return <div className="text-center text-white/50 col-span-full p-10">Aguardando dados para as tabelas...</div>;
     }
+
+    const { vendas, cancelamentos } = tableData;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 h-96">
