@@ -46,7 +46,7 @@ export default function ResultadosPage() {
                 const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Falha ao buscar dados');
-                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) })).filter(d => d.data && !isNaN(d.data));
+                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
                 setAllDeals(dealsComData);
             } catch (err) {
                 setError(err.message);
@@ -92,7 +92,7 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
         const vendas = filteredDeals.filter(d => d.status === 'Venda');
-        const cancelados = filteredDeals.filter(d => d.status === 'Churn' && d.stageId === 110065019);
+        const cancelados = filteredDeals.filter(d => d.status === 'Churn');
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const mrrNet = mrrConquistado - mrrPerdido;
