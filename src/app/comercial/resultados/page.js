@@ -123,8 +123,60 @@ export default function ResultadosPage() {
             
             {/* Filtros */}
             <div className="mb-6 p-4 bg-black/20 rounded-lg flex flex-wrap items-center gap-4">
-                {/* ... (código dos filtros aqui) ... */}
+            <div className="flex flex-wrap items-end gap-4">
+                {/* Filtro de Empresa */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">Empresa</label>
+                    <select value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} className="bg-white/10 p-2 rounded-md text-white w-40">
+                        <option value="VMC Tech">VMC Tech</option>
+                        <option value="Victec">Victec</option>
+                    </select>
+                </div>
+            
+                {/* Filtro de Ano */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">Ano</label>
+                    <select value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} className="bg-white/10 p-2 rounded-md text-white w-28" disabled={loading}>
+                        {anos.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+                    </select>
+                </div>
+            
+                {/* Filtro de Mês */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">Meses</label>
+                    {/* Este é um dropdown mais complexo para seleção múltipla */}
+                    <div className="relative">
+                        <select multiple value={selectedMeses} onChange={(e) => setSelectedMeses(Array.from(e.target.selectedOptions, option => option.value))} className="bg-white/10 p-2 rounded-md text-white w-48 h-32">
+                            {meses.map(mes => <option key={mes} value={mes}>{mes}</option>)}
+                        </select>
+                    </div>
+                </div>
+            
+                {/* Filtro de Produto */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">Produto</label>
+                    <select value={selectedProduto} onChange={(e) => setSelectedProduto(e.target.value)} className="bg-white/10 p-2 rounded-md text-white w-40" disabled={loading}>
+                        {produtos.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                </div>
+            
+                {/* Filtro de Vendedor */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">Vendedor</label>
+                    <select value={selectedVendedor} onChange={(e) => setSelectedVendedor(e.target.value)} className="bg-white/10 p-2 rounded-md text-white w-40" disabled={loading}>
+                        {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                </div>
+            
+                {/* Filtro de SDR */}
+                <div>
+                    <label className="text-xs text-white/70 block mb-1">SDR</label>
+                    <select value={selectedSdr} onChange={(e) => setSelectedSdr(e.target.value)} className="bg-white/10 p-2 rounded-md text-white w-40" disabled={loading}>
+                        {sdrs.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
             </div>
+                        </div>
 
             {/* KPIs */}
             {loading ? <p>Carregando KPIs...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
