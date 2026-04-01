@@ -99,7 +99,7 @@ export default function ResultadosPage() {
 
         const vendas = dealsFiltrados.filter(d => d.status === 'Venda');
         
-        // LÓGICA DE ENRIQUECIMENTO DOS DADOS DE CHURN
+        // LÓGICA CORRIGIDA PARA ENRIQUECER OS DADOS DE CHURN
         const cancelados = dealsFiltrados
             .filter(d => d.status === 'Churn')
             .map(churnDeal => {
