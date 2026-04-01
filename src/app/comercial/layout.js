@@ -4,7 +4,7 @@ import Image from 'next/image';
 
 function NavLink({ href, children }) {
     const pathname = usePathname();
-    const isActive = pathname === href;
+    const isActive = pathname.startsWith(href);
     return (
         <a href={href} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${isActive ? 'bg-acelerar-light-blue text-acelerar-dark-blue' : 'text-white hover:bg-white/10'}`}>
             {children}
@@ -15,25 +15,24 @@ function NavLink({ href, children }) {
 export default function ComercialLayout({ children }) {
     const router = useRouter();
     return (
-        <div className="min-h-screen w-full bg-acelerar-dark-blue text-white flex">
-            {/* Sidebar (Menu Lateral) - Fixo por enquanto */}
-            <aside className="w-64 bg-black/20 p-4 flex-shrink-0">
-                <div className="flex items-center gap-2 mb-6">
+        <div className="min-h-screen w-full bg-acelerar-dark-blue text-white flex flex-col">
+            {/* Cabeçalho Fixo no Topo */}
+            <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg shrink-0">
+                <div className="flex items-center gap-4">
                     <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={40} height={40} />
-                    <h2 className="font-bold text-lg">Comercial</h2>
+                    <h1 className="text-xl font-bold text-acelerar-light-blue">Comercial</h1>
                 </div>
-                <nav className="flex flex-col gap-2">
-                    <h3 className="text-xs uppercase text-white/50 font-bold tracking-wider">Paineis</h3>
+                <nav className="flex items-center gap-2">
                     <NavLink href="/comercial/resultados">📊 Resultados</NavLink>
                     <NavLink href="/comercial/desempenho">🏆 Desempenho</NavLink>
                     <NavLink href="/comercial/inadimplencia">📋 Inadimplência</NavLink>
                 </nav>
-                <div className="mt-auto pt-4 border-t border-white/10">
-                     <button onClick={() => router.push('/dashboard')} className="w-full text-left text-sm text-white/70 hover:text-white transition-colors">&larr; Voltar ao Hub</button>
+                <div>
+                    <button onClick={() => router.push('/dashboard')} className="text-sm text-white/70 hover:text-white transition-colors mr-4">&larr; Voltar ao Hub</button>
                 </div>
-            </aside>
+            </header>
 
-            {/* Conteúdo Principal da Página */}
+            {/* Conteúdo Principal (que será o children) */}
             <main className="flex-1 overflow-y-auto">
                 {children}
             </main>
