@@ -9,9 +9,7 @@ const exportToCSV = (data, headers, filename) => {
 
     for (const row of data) {
         const values = headers.map(header => {
-            // Usa a chave correta para o valor
             const value = row[header.key] || '';
-            // Formata a data se for o caso
             if ((header.key === 'data' || header.key === 'data_churn') && value) {
                 return new Date(value).toLocaleDateString('pt-BR');
             }
@@ -82,7 +80,7 @@ export default function TabelasResumo({ tableData }) {
 
     const headersVendas = [
         { key: 'data', label: 'Data', isDate: true },
-        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO FINAL AQUI
+        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
         { key: 'cliente', label: 'Cliente' },
         { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
         { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
@@ -94,10 +92,10 @@ export default function TabelasResumo({ tableData }) {
 
     const headersCancelamentos = [
         { key: 'data_churn', label: 'Data Churn', isDate: true },
-        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO FINAL AQUI
+        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
         { key: 'cliente', label: 'Cliente' },
-        { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
-        { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
+        { key: 'Vendedor Original', label: 'Vendedor', hidden: 'hidden md:table-cell' }, // CORREÇÃO FINAL
+        { key: 'SDR Original', label: 'SDR', hidden: 'hidden lg:table-cell' }, // CORREÇÃO FINAL
         { key: 'produto', label: 'Produto', hidden: 'hidden md:table-cell' },
         { key: 'mrr', label: 'MRR Perdido', isCurrency: true },
     ];
