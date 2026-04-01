@@ -1,16 +1,9 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import dynamic from 'next/dynamic'; // Importar a função 'dynamic'
+import dynamic from 'next/dynamic';
 
-// CARREGAMENTO DINÂMICO DO COMPONENTE DE GRÁFICOS
-const GraficosResultados = dynamic(
-    () => import('./GraficosResultados'),
-    { 
-        ssr: false, // Diz para o Next.js NUNCA renderizar isso no servidor
-        loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> // Mensagem de loading
-    }
-);
+const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -92,8 +85,9 @@ export default function ResultadosPage() {
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    const { filteredDeals, kpis } = useMemo(() => {
-        if (loading || allDeals.length === 0) return { filteredDeals: [], kpis: {} };
+    const { kpis, chartData } = useMemo(() => {
+        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null };
+        
         const deals = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
@@ -101,21 +95,55 @@ export default function ResultadosPage() {
             (selectedVendedor === 'Todos' || d.vendedor === selectedVendedor) &&
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
+
         const vendas = deals.filter(d => d.status === 'Venda');
         const cancelados = deals.filter(d => d.status === 'Churn');
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
-        const mrrNet = mrrConquistado - mrrPerdido;
-        const totalUpsell = vendas.reduce((sum, d) => sum + d.upsell, 0);
-        const clientesFechados = vendas.length;
-        const ticketMedio = clientesFechados > 0 ? mrrConquistado / clientesFechados : 0;
-        const adesaoTotal = vendas.reduce((sum, d) => sum + d.adesao, 0);
-        const clientesCancelados = cancelados.length;
-        const carteiraAtiva = allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length;
-        const percentualMrrPerdido = mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0;
-        const percentualClientesCancelados = clientesFechados > 0 ? (clientesCancelados / clientesFechados) : 100;
-        return { filteredDeals: deals, kpis: kpisCalculados, chartData: chartDataCalculado };
-        }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
+        const kpisCalculados = {
+            mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
+            totalUpsell: vendas.reduce((sum, d) => sum + d.upsell, 0),
+            ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
+            adesaoTotal: vendas.reduce((sum, d) => sum + d.adesao, 0),
+            clientesFechados: vendas.length, clientesCancelados: cancelados.length,
+            carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
+            percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
+            percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
+        };
+
+        // LÓGICA DE GRÁFICOS PARA RECHARTS
+        const labels = MESES_ORDEM.filter(mes => selectedMeses.includes(mes));
+        const monthlyData = labels.map(mes => {
+            const dealsDoMes = deals.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
+            const vendasDoMes = dealsDoMes.filter(d => d.status === 'Venda');
+            const churnDoMes = dealsDoMes.filter(d => d.status === 'Churn');
+            return {
+                mes,
+                mrr: vendasDoMes.reduce((sum, d) => sum + (d.mrr || 0), 0),
+                upsell: vendasDoMes.reduce((sum, d) => sum + (d.upsell || 0), 0),
+                churn: churnDoMes.reduce((sum, d) => sum + (d.mrr || 0), 0),
+                contratos: vendasDoMes.length,
+            };
+        });
+
+        const metas = { 'VMC Tech': { mrr: 8000, contratos: 17 }, 'Victec': { mrr: 10000, contratos: 17 } };
+        const metaEmpresa = metas[selectedEmpresa];
+        let mrrAcumulado = 0;
+        let contratosAcumulados = 0;
+        const accumulatedData = monthlyData.map((d, i) => {
+            mrrAcumulado += d.mrr;
+            contratosAcumulados += d.contratos;
+            return {
+                mes: d.mes,
+                mrr: mrrAcumulado,
+                contratos: contratosAcumulados,
+                metaMrr: metaEmpresa.mrr * (i + 1),
+                metaContratos: metaEmpresa.contratos * (i + 1),
+            };
+        });
+
+        return { kpis: kpisCalculados, chartData: { monthlyData, accumulatedData } };
+    }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const logoEmpresa = selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png';
@@ -159,7 +187,7 @@ export default function ResultadosPage() {
                             <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
                         </div>
                         <div className="mt-8">
-                            <GraficosResultados deals={filteredDeals} selectedMeses={selectedMeses} selectedEmpresa={selectedEmpresa} />
+                            <GraficosResultados chartData={chartData} />
                         </div>
                     </>
                 )}
