@@ -3,7 +3,10 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
+// Import dinâmico para os componentes de visualização
 const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
+const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
+
 
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
@@ -85,8 +88,8 @@ export default function ResultadosPage() {
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    const { kpis, chartData } = useMemo(() => {
-        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null };
+    const { kpis, chartData, tableData } = useMemo(() => {
+        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
         const deals = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
@@ -111,7 +114,6 @@ export default function ResultadosPage() {
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
 
-        // LÓGICA DE GRÁFICOS PARA RECHARTS
         const labels = MESES_ORDEM.filter(mes => selectedMeses.includes(mes));
         const monthlyData = labels.map(mes => {
             const dealsDoMes = deals.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
@@ -142,7 +144,11 @@ export default function ResultadosPage() {
             };
         });
 
-        return { kpis: kpisCalculados, chartData: { monthlyData, accumulatedData } };
+        return { 
+            kpis: kpisCalculados, 
+            chartData: { monthlyData, accumulatedData },
+            tableData: { vendas, cancelados } // Passando os dados para as tabelas
+        };
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
@@ -168,12 +174,12 @@ export default function ResultadosPage() {
                 <FilterSelect label="Vendedor" value={selectedVendedor} onChange={(e) => setSelectedVendedor(e.target.value)} options={vendedores} disabled={loading} />
                 <FilterSelect label="SDR" value={selectedSdr} onChange={(e) => setSelectedSdr(e.target.value)} options={sdrs} disabled={loading} />
             </aside>
-            <div className="flex-1 p-8 overflow-y-auto">
+            <main className="flex-1 p-8 overflow-y-auto">
                 <div className="flex items-center gap-4 mb-6">
                     <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={180} height={60} style={{ objectFit: 'contain' }} />
                     <h1 className="text-3xl font-bold text-white">Resultados (Performance)</h1>
                 </div>
-                {loading ? <p>Carregando KPIs...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
+                {loading ? <p>Carregando...</p> : error ? <p className="text-red-400">Erro: {error}</p> : (
                     <>
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
                             <KpiCard title="MRR Conquistado" value={formatCurrency(kpis.mrrConquistado)} />
@@ -186,12 +192,16 @@ export default function ResultadosPage() {
                             <KpiCard title="Clientes Cancelados" value={kpis.clientesCancelados || 0} color="text-red-400" subValue={`${kpis.percentualClientesCancelados.toFixed(1)}% dos Fechados`} />
                             <KpiCard title="Carteira Ativa" value={kpis.carteiraAtiva || 0} />
                         </div>
+                        
                         <div className="mt-8">
                             <GraficosResultados chartData={chartData} />
                         </div>
+
+                        {/* ADICIONANDO AS TABELAS AQUI */}
+                        {tableData && <TabelasResumo vendas={tableData.vendas} cancelamentos={tableData.cancelamentos} />}
                     </>
                 )}
-            </div>
+            </main>
         </div>
     );
 }
