@@ -114,8 +114,8 @@ export default function ResultadosPage() {
         const carteiraAtiva = allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length;
         const percentualMrrPerdido = mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0;
         const percentualClientesCancelados = clientesFechados > 0 ? (clientesCancelados / clientesFechados) : 100;
-        return { filteredDeals: deals, kpis: { mrrConquistado, mrrPerdido, mrrNet, totalUpsell, ticketMedio, adesaoTotal, clientesFechados, clientesCancelados, carteiraAtiva, percentualMrrPerdido, percentualClientesCancelados } };
-    }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
+        return { filteredDeals: deals, kpis: kpisCalculados, chartData: chartDataCalculado };
+        }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const logoEmpresa = selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png';
