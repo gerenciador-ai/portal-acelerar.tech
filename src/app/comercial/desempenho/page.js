@@ -26,14 +26,10 @@ export default function DesempenhoPage() {
                 <MvpCards deals={vendas} />
                 <RankingCharts deals={vendas} />
                 <SdrFunnelChart deals={vendas} />
-
-                {/* --- SEÇÃO FINAL DE AUDITORIA --- */}
-                
-                {/* 1. Gráfico Principal Escolhido (Barras Empilhadas) */}
                 <StackedAuditChart deals={vendas} />
 
-                {/* 2. Tabela de Apoio (Heatmap) mantida para análise detalhada */}
-                <AuditTable deals={vendas} />
+                {/* Componente de Auditoria agora recebe os dois conjuntos de dados */}
+                <AuditTable dealsGanhos={vendas} dealsGerados={filteredDeals} />
             </div>
         </>
     );
