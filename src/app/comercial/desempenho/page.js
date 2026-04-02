@@ -4,10 +4,10 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import ClientOnlyWrapper from '@/components/ClientOnlyWrapper';
-import { processAndFilterData } from '@/lib/dataProcessor'; // Assumindo que a lógica de filtro será centralizada
+import { processAndFilterData } from '@/lib/dataProcessor';
 
-// --- Componentes que serão criados nas próximas etapas ---
-// import RankingCards from './RankingCards';
+// --- Componentes ---
+import RankingCards from './RankingCards'; // CORREÇÃO: Importa o componente recém-criado
 // import FunilSdr from './FunilSdr';
 // import AuditoriaTable from './AuditoriaTable';
 
@@ -34,19 +34,20 @@ export default function DesempenhoPage() {
     const searchParams = useSearchParams();
     const empresa = searchParams.get('empresa') || 'VMC Tech';
 
-    // Hook SWR para buscar os dados da API (reutilizando o mesmo endpoint)
     const fetcher = (url) => fetch(url).then((res) => res.json());
     const { data: apiData, error } = useSWR(`/api/ploomes/deals?empresa=${empresa}`, fetcher, {
-        revalidateOnFocus: false, // Opcional: evita revalidações excessivas
+        revalidateOnFocus: false,
     });
 
-    // useMemo para processar e filtrar os dados apenas quando os parâmetros de busca ou os dados da API mudarem
     const filteredData = useMemo(() => {
         if (!apiData || !apiData.value) return null;
-        return processAndFilterData(apiData.value, searchParams);
+        // Assumindo que a função processAndFilterData será criada/adaptada em @/lib/dataProcessor.js
+        // Por enquanto, vamos apenas filtrar por status 'Venda' para os rankings
+        const vendas = apiData.value.filter(d => d.status === 'Venda');
+        return vendas; // Simplificação temporária
+        // return processAndFilterData(apiData.value, searchParams);
     }, [apiData, searchParams]);
 
-    // Renderização condicional baseada no estado dos dados
     if (error) return <ErrorComponent message={error.message} />;
     if (!filteredData) return <LoadingComponent />;
     if (filteredData.length === 0) {
@@ -56,15 +57,9 @@ export default function DesempenhoPage() {
     return (
         <ClientOnlyWrapper>
             <div className="space-y-6">
-                {/* 
-                    Os componentes para cada seção do dashboard serão inseridos aqui.
-                    Eles receberão `filteredData` como propriedade para realizar seus cálculos específicos.
-                */}
-
-                {/* ETAPA 1: Será preenchido com <RankingCards data={filteredData} /> */}
-                <div className="p-4 bg-gray-800/20 rounded-lg border border-dashed border-gray-600">
-                    <p className="text-center text-gray-400 text-sm">Área reservada para os Cards de MVP e Rankings de MRR.</p>
-                </div>
+                
+                {/* CORREÇÃO APLICADA: O placeholder foi substituído pelo componente real */}
+                <RankingCards data={filteredData} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* ETAPA 2: Será preenchido com <FunilSdr data={filteredData} /> */}
@@ -72,12 +67,10 @@ export default function DesempenhoPage() {
                         <p className="text-center text-gray-400 text-sm">Área reservada para o Funil de SDRs.</p>
                     </div>
                     
-                    {/* Placeholder para o outro gráfico que existia (Ciclo Médio), se decidirmos adicioná-lo no futuro */}
                     <div className="p-4 bg-gray-800/20 rounded-lg border border-dashed border-gray-600 hidden lg:block">
                          <p className="text-center text-gray-400 text-sm">Área reservada.</p>
                     </div>
                 </div>
-
 
                 {/* ETAPA 3: Será preenchido com <AuditoriaTable data={filteredData} /> */}
                 <div className="p-4 bg-gray-800/20 rounded-lg border border-dashed border-gray-600">
