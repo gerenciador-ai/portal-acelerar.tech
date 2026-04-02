@@ -1,29 +1,29 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { useComercial } from '../layout'; // O hook agora traz os filtros
+import { useComercial } from '../layout';
 import MvpCards from './MvpCards';
 import RankingCharts from './RankingCharts';
 import SdrFunnelChart from './SdrFunnelChart';
 import AuditTable from './AuditTable';
 import StackedAuditChart from './StackedAuditChart';
 
-// --- Página de Desempenho (Refatorada com Lógica de Dados Própria) ---
 export default function DesempenhoPage() {
-    // 1. ESTADOS DE DADOS AGORA SÃO LOCAIS DESTA PÁGINA
     const [allDeals, setAllDeals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // 2. RECEBE APENAS OS FILTROS DO CONTEXTO DO LAYOUT
+    // CORREÇÃO: Pegando os setters do contexto
     const { 
         selectedEmpresa, logoEmpresa, 
-        selectedAno, selectedMeses,
-        selectedProduto, selectedVendedor, selectedSdr
+        setAnos, setSelectedAno, selectedAno,
+        setMeses, setSelectedMeses, selectedMeses,
+        setProdutos, selectedProduto,
+        setVendedores, selectedVendedor,
+        setSdrs, selectedSdr,
+        MESES_ORDEM
     } = useComercial();
 
-    // 3. LÓGICA DE BUSCA DE DADOS DE VENDAS (MOVIDA DO LAYOUT PARA CÁ)
-    // Como esta página também usa dados de Vendas, ela precisa fazer a mesma busca.
     useEffect(() => {
         if (!selectedEmpresa) return;
         const fetchData = async () => {
@@ -43,9 +43,29 @@ export default function DesempenhoPage() {
         fetchData();
     }, [selectedEmpresa]);
 
-    // 4. LÓGICA DE FILTRAGEM (usa os estados locais e os filtros do contexto)
+    // CORREÇÃO: Adicionando a lógica para popular os filtros
+    useEffect(() => {
+        if (allDeals.length === 0) return;
+        const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
+        setAnos(anosUnicos);
+        if (!anosUnicos.includes(selectedAno)) setSelectedAno(anosUnicos[0] || new Date().getFullYear());
+        
+        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(allDeals.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
+        setProdutos(getUniqueAndSorted('produto'));
+        setVendedores(getUniqueAndSorted('vendedor'));
+        setSdrs(getUniqueAndSorted('sdr'));
+    }, [allDeals, setAnos, setSelectedAno, setProdutos, setVendedores, setSdrs]);
+
+    useEffect(() => {
+        if (allDeals.length === 0 || !selectedAno) return;
+        const mesesDoAno = [...new Set(allDeals.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
+        const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')).sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
+        setMeses(mesesNomes);
+        setSelectedMeses(mesesNomes);
+    }, [selectedAno, allDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
+
     const filteredDeals = useMemo(() => {
-        if (loading || allDeals.length === 0) return [];
+        if (loading || allDeals.length === 0 || selectedMeses.length === 0) return []; // Adicionado selectedMeses.length === 0
         return allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
@@ -55,10 +75,8 @@ export default function DesempenhoPage() {
         );
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
 
-    // 5. LÓGICA DE CÁLCULO (sem alterações, apenas usa os dados locais)
     const vendas = useMemo(() => filteredDeals.filter(deal => deal.status === 'Venda'), [filteredDeals]);
 
-    // 6. RENDERIZAÇÃO (usa o estado de loading local)
     if (loading) return <p className="text-center p-10">Carregando dados de Desempenho...</p>;
     if (error) return <p className="text-center p-10 text-red-400">Erro: {error.message}</p>;
 
