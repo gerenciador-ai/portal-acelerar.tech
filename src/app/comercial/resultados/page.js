@@ -33,7 +33,7 @@ const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loa
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 export default function ResultadosPage() {
-    const [rawDeals, setRawDeals] = useState([]);
+    const [allDeals, setAllDeals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedEmpresa, setSelectedEmpresa] = useState('VMC Tech');
@@ -54,12 +54,12 @@ export default function ResultadosPage() {
                 setLoading(true); setError(null);
                 const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}`);
                 if (!response.ok) {
-                    // Se a resposta não for OK, lança um erro com a mensagem do servidor
                     const errorData = await response.json();
                     throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
                 }
                 const data = await response.json();
-                setRawDeals(data.value);
+                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
+                setAllDeals(dealsComData);
             } catch (err) {
                 setError(err);
             } finally {
@@ -69,61 +69,31 @@ export default function ResultadosPage() {
         fetchData();
     }, [selectedEmpresa]);
 
-    const processedData = useMemo(() => {
-        if (!rawDeals || rawDeals.length === 0) return [];
-
-        return rawDeals.map(deal => {
-            // CORREÇÃO DE SEGURANÇA: Verifica se OtherProperties existe antes de usá-lo.
-            const getOtherProp = (key) => {
-                if (!deal.OtherProperties) return null; // Se não houver OtherProperties, retorna nulo.
-                const prop = deal.OtherProperties.find(p => p.FieldKey === key);
-                return prop?.StringValue || null;
-            };
-
-            return {
-                id: deal.Id,
-                contactId: deal.Contact?.Id,
-                data: new Date(deal.CreateDate),
-                data_churn: getOtherProp('deal_custom_fields_256') ? new Date(getOtherProp('deal_custom_fields_256')) : null,
-                cliente: deal.Contact?.Name,
-                CNPJ: deal.Contact?.CNPJ,
-                vendedor: deal.Owner?.Name,
-                sdr: getOtherProp('deal_custom_fields_255'),
-                produto: getOtherProp('deal_custom_fields_252'),
-                mrr: deal.Amount || 0, // Garante que MRR seja no mínimo 0
-                adesao: parseFloat(getOtherProp('deal_custom_fields_253') || 0),
-                upsell: parseFloat(getOtherProp('deal_custom_fields_254') || 0),
-                status: deal.Stage?.Name, // Acessa o nome do estágio de forma segura
-            };
-        }).filter(deal => deal.status); // Remove deals que não tenham um status definido
-    }, [rawDeals]);
-
-    // ... (O restante do código, a partir do useEffect que depende de processedData, permanece o mesmo)
     useEffect(() => {
-        if (processedData.length === 0) return;
-        const anosUnicos = [...new Set(processedData.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
+        if (allDeals.length === 0) return;
+        const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
         setAnos(anosUnicos);
         if (!anosUnicos.includes(selectedAno)) setSelectedAno(anosUnicos[0] || new Date().getFullYear());
-        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(processedData.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
+        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(allDeals.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
         setProdutos(getUniqueAndSorted('produto'));
         setVendedores(getUniqueAndSorted('vendedor'));
         setSdrs(getUniqueAndSorted('sdr'));
-    }, [processedData]);
+    }, [allDeals]);
 
     useEffect(() => {
-        if (processedData.length === 0 || !selectedAno) return;
-        const mesesDoAno = [...new Set(processedData.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
+        if (allDeals.length === 0 || !selectedAno) return;
+        const mesesDoAno = [...new Set(allDeals.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
         const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')).sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
         setMeses(mesesNomes);
         setSelectedMeses(mesesNomes);
-    }, [selectedAno, processedData]);
+    }, [selectedAno, allDeals]);
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
     const { kpis, chartData, tableData } = useMemo(() => {
-        if (loading || processedData.length === 0) return { kpis: {}, chartData: null, tableData: null };
+        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
-        const dealsFiltrados = processedData.filter(d =>
+        const dealsFiltrados = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
             (selectedProduto === 'Todos' || d.produto === selectedProduto) &&
@@ -135,7 +105,7 @@ export default function ResultadosPage() {
         const canceladosBrutos = dealsFiltrados.filter(d => d.status === 'Perdido (Churn)');
 
         const cancelados = canceladosBrutos.map(churnDeal => {
-            const vendaOriginal = processedData.find(d => d.status === 'Ganho' && d.contactId === churnDeal.contactId);
+            const vendaOriginal = allDeals.find(d => d.status === 'Ganho' && d.contactId === churnDeal.contactId);
             return {
                 ...churnDeal,
                 vendedorOriginal: vendaOriginal ? vendaOriginal.vendedor : 'N/A',
@@ -151,7 +121,7 @@ export default function ResultadosPage() {
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
             adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
             clientesFechados: vendas.length, clientesCancelados: cancelados.length,
-            carteiraAtiva: processedData.filter(d => d.status === 'Ganho').length - processedData.filter(d => d.status === 'Perdido (Churn)').length,
+            carteiraAtiva: allDeals.filter(d => d.status === 'Ganho').length - allDeals.filter(d => d.status === 'Perdido (Churn)').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
@@ -191,7 +161,7 @@ export default function ResultadosPage() {
             chartData: { monthlyData, accumulatedData },
             tableData: { vendas, cancelados }
         };
-    }, [loading, processedData, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
+    }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const logoEmpresa = selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png';
