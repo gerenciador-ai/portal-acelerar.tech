@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { useComercial } from '../layout';
 import MvpCards from './MvpCards';
 import RankingCharts from './RankingCharts';
-import SdrFunnelChart from './SdrFunnelChart'; // 1. IMPORTA o novo componente de funil
+import SdrFunnelChart from './SdrFunnelChart';
 
 export default function DesempenhoPage() {
     const { filteredDeals, loading, error, selectedEmpresa, logoEmpresa } = useComercial();
@@ -11,7 +11,7 @@ export default function DesempenhoPage() {
     if (loading) return <p className="text-center p-10">Carregando dados do Ploomes...</p>;
     if (error) return <p className="text-center p-10 text-red-400">Erro: {error.message}</p>;
 
-    // 'vendas' é usado para MVPs e Rankings de MRR
+    // 'vendas' contém apenas negócios com status 'Venda'
     const vendas = filteredDeals.filter(deal => deal.status === 'Venda');
 
     return (
@@ -22,11 +22,13 @@ export default function DesempenhoPage() {
             </div>
 
             <div className="space-y-6">
+                {/* MvpCards recebe apenas VENDAS para calcular o MVP de MRR */}
                 <MvpCards deals={vendas} />
                 
+                {/* RankingCharts recebe apenas VENDAS para calcular o ranking de MRR */}
                 <RankingCharts deals={vendas} />
 
-                {/* 2. SUBSTITUI o placeholder pelo componente real, passando TODOS os deals filtrados */}
+                {/* SdrFunnelChart recebe TODOS os deals para contar a originação de negócios */}
                 <SdrFunnelChart deals={filteredDeals} />
 
                 {/* Seção 4: Tabela de Auditoria (ainda como placeholder) */}
