@@ -1,11 +1,12 @@
 "use client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line } from 'recharts';
 
-const CustomTooltip = ({ active, payload, label }) => {
+// Tooltip customizado para valores em MOEDA (R$)
+const CustomTooltipCurrency = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-acelerar-dark-blue p-2 border border-acelerar-light-blue rounded-md text-sm">
-                <p className="label text-white font-bold">{`${label}`}</p>
+                <p className="label text-white font-bold capitalize">{`${label}`}</p>
                 {payload.map((p, i) => (
                     <p key={i} style={{ color: p.color }}>
                         {`${p.name}: ${p.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
@@ -16,6 +17,25 @@ const CustomTooltip = ({ active, payload, label }) => {
     }
     return null;
 };
+
+// NOVO Tooltip customizado para valores NUMÉRICOS (Contratos)
+const CustomTooltipNumber = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-acelerar-dark-blue p-2 border border-acelerar-light-blue rounded-md text-sm">
+                <p className="label text-white font-bold capitalize">{`${label}`}</p>
+                {payload.map((p, i) => (
+                    <p key={i} style={{ color: p.color }}>
+                        {/* A única diferença é a formatação do valor, sem R$ */}
+                        {`${p.name}: ${p.value.toLocaleString('pt-BR')}`}
+                    </p>
+                ))}
+            </div>
+        );
+    }
+    return null;
+};
+
 
 const ChartCard = ({ data, title, children }) => (
     <div className="bg-white/5 p-4 rounded-lg h-full flex flex-col">
@@ -33,7 +53,7 @@ export default function GraficosResultados({ chartData }) {
         return <div className="text-center text-white/50 col-span-full p-10">Sem dados para exibir nos gráficos.</div>;
     }
 
-    const { monthlyData, accumulatedData, metaData } = chartData;
+    const { monthlyData, accumulatedData } = chartData;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -43,7 +63,8 @@ export default function GraficosResultados({ chartData }) {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                         <XAxis dataKey="mes" stroke="#FFFFFF" fontSize={10} />
                         <YAxis stroke="#FFFFFF" fontSize={10} tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(value)} />
-                        <Tooltip content={<CustomTooltip />} />
+                        {/* Alterado para usar o tooltip de moeda */}
+                        <Tooltip content={<CustomTooltipCurrency />} />
                         <Legend wrapperStyle={{ fontSize: "10px" }} />
                         <Bar dataKey="mrr" name="MRR Acumulado" fill="rgba(137, 207, 240, 0.7)" />
                         <Line type="monotone" dataKey="metaMrr" name="Meta MRR" stroke="#FFFFFF" strokeWidth={2} dot={false} />
@@ -56,7 +77,8 @@ export default function GraficosResultados({ chartData }) {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                         <XAxis dataKey="mes" stroke="#FFFFFF" fontSize={10} />
                         <YAxis stroke="#FFFFFF" fontSize={10} allowDecimals={false} />
-                        <Tooltip />
+                        {/* CORREÇÃO APLICADA: Usa o novo tooltip de número */}
+                        <Tooltip content={<CustomTooltipNumber />} />
                         <Legend wrapperStyle={{ fontSize: "10px" }} />
                         <Bar dataKey="contratos" name="Contratos Acumulados" fill="rgba(137, 207, 240, 0.7)" />
                         <Line type="monotone" dataKey="metaContratos" name="Meta Contratos" stroke="#FFFFFF" strokeWidth={2} dot={false} />
@@ -70,7 +92,8 @@ export default function GraficosResultados({ chartData }) {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                             <XAxis dataKey="mes" stroke="#FFFFFF" fontSize={10} />
                             <YAxis stroke="#FFFFFF" fontSize={10} tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(value)} />
-                            <Tooltip content={<CustomTooltip />} />
+                            {/* Alterado para usar o tooltip de moeda */}
+                            <Tooltip content={<CustomTooltipCurrency />} />
                             <Bar dataKey="mrr" name="MRR" fill="#89CFF0" />
                         </BarChart>
                     </ChartCard>
@@ -79,7 +102,8 @@ export default function GraficosResultados({ chartData }) {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                             <XAxis dataKey="mes" stroke="#FFFFFF" fontSize={10} />
                             <YAxis stroke="#FFFFFF" fontSize={10} tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(value)} />
-                            <Tooltip content={<CustomTooltip />} />
+                            {/* Alterado para usar o tooltip de moeda */}
+                            <Tooltip content={<CustomTooltipCurrency />} />
                             <Bar dataKey="upsell" name="Upsell" fill="#2ECC71" />
                         </BarChart>
                     </ChartCard>
@@ -88,7 +112,8 @@ export default function GraficosResultados({ chartData }) {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                             <XAxis dataKey="mes" stroke="#FFFFFF" fontSize={10} />
                             <YAxis stroke="#FFFFFF" fontSize={10} tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { notation: 'compact', compactDisplay: 'short' }).format(value)} />
-                            <Tooltip content={<CustomTooltip />} />
+                            {/* Alterado para usar o tooltip de moeda */}
+                            <Tooltip content={<CustomTooltipCurrency />} />
                             <Bar dataKey="churn" name="Churn" fill="#E74C3C" />
                         </BarChart>
                     </ChartCard>
