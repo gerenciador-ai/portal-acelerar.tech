@@ -20,7 +20,6 @@ function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' })
 }
 
 export default function ResultadosPage() {
-    // 1. ESTADO LOCAL PARA ARMAZENAR OS DADOS COMBINADOS
     const [allDeals, setAllDeals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -35,7 +34,6 @@ export default function ResultadosPage() {
         MESES_ORDEM
     } = useComercial();
 
-    // 2. LÓGICA DE BUSCA DE DADOS ATUALIZADA
     useEffect(() => {
         if (!selectedEmpresa) return;
         const fetchData = async () => {
@@ -43,23 +41,19 @@ export default function ResultadosPage() {
                 setLoading(true);
                 setError(null);
 
-                // Busca dados de Vendas e Churn em paralelo
                 const [vendasRes, churnRes] = await Promise.all([
                     fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=vendas`),
                     fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=churn`)
                 ]);
 
-                if (!vendasRes.ok || !churnRes.ok) {
-                    throw new Error('Falha ao buscar dados de Vendas ou Churn.');
-                }
+                if (!vendasRes.ok || !churnRes.ok) throw new Error('Falha ao buscar dados de Vendas ou Churn.');
 
                 const vendasData = await vendasRes.json();
                 const churnData = await churnRes.json();
 
                 const vendasComData = vendasData.value.map(d => ({ ...d, data: new Date(d.data) }));
-                let churnComData = churnData.value.map(d => ({ ...d, data: new Date(d.data) }));
+                let churnComData = churnData.value.map(d => ({ ...d, data: new Date(d.data), status: 'Churn' })); // Garante o status
 
-                // 3. LÓGICA DE ENRIQUECIMENTO DO CHURN (MOVIDA DA API PARA CÁ)
                 const dataMap = new Map();
                 for (const venda of vendasComData) {
                     if (venda.contactId && venda.status === 'Venda') {
@@ -77,7 +71,6 @@ export default function ResultadosPage() {
                     return churn;
                 });
 
-                // Combina os dados de vendas (apenas os ganhos) com os de churn (já enriquecidos)
                 const vendasGanha = vendasComData.filter(v => v.status === 'Venda');
                 setAllDeals([...vendasGanha, ...churnComData]);
 
@@ -90,7 +83,6 @@ export default function ResultadosPage() {
         fetchData();
     }, [selectedEmpresa]);
 
-    // Lógica para popular os filtros (sem alterações)
     useEffect(() => {
         if (allDeals.length === 0) return;
         const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
@@ -111,7 +103,6 @@ export default function ResultadosPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, allDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    // Lógica de filtragem (sem alterações)
     const filteredDeals = useMemo(() => {
         if (loading || allDeals.length === 0 || selectedMeses.length === 0) return [];
         return allDeals.filter(d =>
@@ -123,27 +114,32 @@ export default function ResultadosPage() {
         );
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
 
-    // Lógica de cálculo dos KPIs (sem alterações)
+    // CORREÇÃO: A lógica de cálculo foi ajustada para usar os dados corretos
     const { kpis, chartData, tableData } = useMemo(() => {
-        // ... (nenhuma alteração necessária aqui, pois `filteredDeals` já contém os dados corretos)
-        if (!filteredDeals || filteredDeals.length === 0) {
-            return { kpis: {}, chartData: null, tableData: null };
-        }
+        if (loading) return { kpis: {}, chartData: null, tableData: null };
         
-        const vendas = filteredDeals.filter(d => d.status === 'Venda');
-        const cancelados = filteredDeals.filter(d => d.status === 'Churn');
-        const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
-        const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
+        // KPIs do período são calculados com base nos dados FILTRADOS
+        const vendasPeriodo = filteredDeals.filter(d => d.status === 'Venda');
+        const canceladosPeriodo = filteredDeals.filter(d => d.status === 'Churn');
+        const mrrConquistado = vendasPeriodo.reduce((sum, d) => sum + d.mrr, 0);
+        const mrrPerdido = canceladosPeriodo.reduce((sum, d) => sum + d.mrr, 0);
+
+        // KPIs da carteira são calculados com base em TODOS os dados
+        const totalVendas = allDeals.filter(d => d.status === 'Venda');
+        const totalCancelados = allDeals.filter(d => d.status === 'Churn');
 
         const kpisCalculados = {
-            mrrConquistado, mrrPerdido, mrrNet: mrrConquistado - mrrPerdido,
-            totalUpsell: vendas.reduce((sum, d) => sum + (d.upsell || 0), 0),
-            ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
-            adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
-            clientesFechados: vendas.length, clientesCancelados: cancelados.length,
-            carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
+            mrrConquistado,
+            mrrPerdido,
+            mrrNet: mrrConquistado - mrrPerdido,
+            totalUpsell: vendasPeriodo.reduce((sum, d) => sum + (d.upsell || 0), 0),
+            ticketMedio: vendasPeriodo.length > 0 ? mrrConquistado / vendasPeriodo.length : 0,
+            adesaoTotal: vendasPeriodo.reduce((sum, d) => sum + (d.adesao || 0), 0),
+            clientesFechados: vendasPeriodo.length,
+            clientesCancelados: canceladosPeriodo.length,
+            carteiraAtiva: totalVendas.length - totalCancelados.length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
-            percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
+            percentualClientesCancelados: vendasPeriodo.length > 0 ? (canceladosPeriodo.length / vendasPeriodo.length) * 100 : 0,
         };
 
         const mesesSelecionados = [...new Set(filteredDeals.map(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')))];
@@ -174,9 +170,9 @@ export default function ResultadosPage() {
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
-            tableData: { vendas, cancelados }
+            tableData: { vendas: vendasPeriodo, cancelados: canceladosPeriodo }
         };
-    }, [filteredDeals, allDeals, selectedEmpresa, MESES_ORDEM]);
+    }, [filteredDeals, allDeals, selectedEmpresa, MESES_ORDEM, loading]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
 
