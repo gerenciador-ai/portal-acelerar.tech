@@ -3,8 +3,8 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-// CORREÇÃO APLICADA: O caminho do import foi alterado para um caminho relativo.
-import ClientOnlyWrapper from '../../../components/ClientOnlyWrapper'; 
+// CORREÇÃO APLICADA: Usa o atalho correto, confirmado pela sua informação.
+import ClientOnlyWrapper from '@/components/ClientOnlyWrapper'; 
 // import { processAndFilterData } from '@/lib/dataProcessor';
 
 // --- Componentes ---
