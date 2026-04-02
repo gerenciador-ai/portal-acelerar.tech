@@ -4,7 +4,8 @@ import { useComercial } from '../layout';
 import MvpCards from './MvpCards';
 import RankingCharts from './RankingCharts';
 import SdrFunnelChart from './SdrFunnelChart';
-import AuditTable from './AuditTable'; // 1. IMPORTA o novo componente de auditoria
+import AuditTable from './AuditTable';
+import StackedAuditChart from './StackedAuditChart'; // 1. IMPORTA o novo componente (Opção 2)
 
 export default function DesempenhoPage() {
     const { filteredDeals, loading, error, selectedEmpresa, logoEmpresa } = useComercial();
@@ -12,7 +13,6 @@ export default function DesempenhoPage() {
     if (loading) return <p className="text-center p-10">Carregando dados do Ploomes...</p>;
     if (error) return <p className="text-center p-10 text-red-400">Erro: {error.message}</p>;
 
-    // 'vendas' contém apenas negócios com status 'Venda'
     const vendas = filteredDeals.filter(deal => deal.status === 'Venda');
 
     return (
@@ -23,17 +23,15 @@ export default function DesempenhoPage() {
             </div>
 
             <div className="space-y-6">
-                {/* MvpCards recebe apenas VENDAS para calcular o MVP de MRR */}
                 <MvpCards deals={vendas} />
-                
-                {/* RankingCharts recebe apenas VENDAS para calcular o ranking de MRR */}
                 <RankingCharts deals={vendas} />
-
-                {/* SdrFunnelChart recebe VENDAS para contar a quantidade de negócios ganhos */}
                 <SdrFunnelChart deals={vendas} />
 
-                {/* 2. SUBSTITUI o placeholder pelo componente real, passando os dados de vendas */}
+                {/* 2. RENDERIZA A OPÇÃO 1 (Tabela Aprimorada) */}
                 <AuditTable deals={vendas} />
+
+                {/* 3. RENDERIZA A OPÇÃO 2 (Barras Empilhadas) logo abaixo */}
+                <StackedAuditChart deals={vendas} />
             </div>
         </>
     );
