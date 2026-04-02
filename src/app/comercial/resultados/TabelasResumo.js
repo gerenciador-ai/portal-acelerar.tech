@@ -80,7 +80,7 @@ export default function TabelasResumo({ tableData }) {
 
     const headersVendas = [
         { key: 'data', label: 'Data', isDate: true },
-        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
+        { key: 'CNPJ', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO APLICADA
         { key: 'cliente', label: 'Cliente' },
         { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
         { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
@@ -92,10 +92,10 @@ export default function TabelasResumo({ tableData }) {
 
     const headersCancelamentos = [
         { key: 'data_churn', label: 'Data Churn', isDate: true },
-        { key: 'CNPJ_Cliente', label: 'CNPJ', hidden: 'hidden lg:table-cell' },
+        { key: 'CNPJ', label: 'CNPJ', hidden: 'hidden lg:table-cell' }, // CORREÇÃO APLICADA
         { key: 'cliente', label: 'Cliente' },
-        { key: 'Vendedor Original', label: 'Vendedor', hidden: 'hidden md:table-cell' }, // CORREÇÃO FINAL
-        { key: 'SDR Original', label: 'SDR', hidden: 'hidden lg:table-cell' }, // CORREÇÃO FINAL
+        { key: 'vendedor', label: 'Vendedor', hidden: 'hidden md:table-cell' },
+        { key: 'sdr', label: 'SDR', hidden: 'hidden lg:table-cell' },
         { key: 'produto', label: 'Produto', hidden: 'hidden md:table-cell' },
         { key: 'mrr', label: 'MRR Perdido', isCurrency: true },
     ];
