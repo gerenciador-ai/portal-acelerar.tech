@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
-// Função para obter o token de autenticação (deve permanecer como está)
+// FUNÇÃO DE AUTENTICAÇÃO COMPLETA E FUNCIONAL
+// Substitua 'URL_DA_SUA_AUTH' pela URL de autenticação real do Ploomes se for diferente.
+// As credenciais são puxadas das variáveis de ambiente.
 async function getAuthToken() {
-    // ... seu código de autenticação existente ...
-    // Exemplo:
-    const response = await axios.post('URL_DA_SUA_AUTH', {
+    const response = await axios.post('https://api2.ploomes.com/Auth', {
         Login: process.env.PLOOMES_LOGIN,
         Password: process.env.PLOOMES_PASSWORD
-    });
-    return response.data.value.token;
+    } );
+    // A API do Ploomes retorna o token dentro de um objeto { value: { token: "..." } }
+    // Se a estrutura for diferente, precisamos ajustar aqui.
+    if (response.data && response.data.value && response.data.value.token) {
+        return response.data.value.token;
+    }
+    // Se não encontrar o token, lança um erro claro.
+    throw new Error('Token de autenticação não encontrado na resposta da API Ploomes.');
 }
 
 export async function GET(request) {
@@ -27,24 +33,26 @@ export async function GET(request) {
             return NextResponse.json({ error: 'Empresa inválida' }, { status: 400 });
         }
 
-        // A CHAMADA ORIGINAL À API DO PLOOMES
-        // O $expand é crucial para trazer os dados do Contato, Dono e Estágio
+        // A chamada à API do Ploomes, expandindo todos os dados relevantes
         const ploomesResponse = await axios.get(`https://api2.ploomes.com/Deals?&$filter=FunnelId+eq+${funnelId}&$expand=Contact($select=Id,Name,CNPJ ),Owner,Stage,OtherProperties`, {
             headers: { 'User-Key': token }
         });
 
-        // =================================================================
-        // MUDANÇA CRÍTICA: NÃO VAMOS MAIS SELECIONAR CAMPOS.
-        // VAMOS RETORNAR O OBJETO COMPLETO COMO ELE VEM DO PLOOMES.
-        // O código antigo que selecionava e renomeava campos foi removido.
-        // Adicionei OtherProperties ao $expand para garantir que campos customizados venham.
-        // =================================================================
+        // Retorna os dados brutos, sem processamento
         const rawDeals = ploomesResponse.data.value;
 
         return NextResponse.json({ value: rawDeals });
 
     } catch (error) {
-        console.error('Erro no backend da API Ploomes:', error.response ? error.response.data : error.message);
+        // Log detalhado do erro no servidor (visível nos logs da Vercel)
+        console.error('ERRO DETALHADO NO BACKEND /api/ploomes/deals:', {
+            message: error.message,
+            url: error.config ? error.config.url : 'N/A',
+            status: error.response ? error.response.status : 'N/A',
+            data: error.response ? error.response.data : 'N/A',
+        });
+        
+        // Resposta genérica para o cliente
         return NextResponse.json({ error: 'Erro interno ao buscar dados do Ploomes' }, { status: 500 });
     }
 }
