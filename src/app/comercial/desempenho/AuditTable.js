@@ -74,8 +74,8 @@ export default function AuditTable({ dealsGanhos, dealsGerados }) {
         <div className="bg-white/10 p-4 rounded-lg overflow-x-auto">
             <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-4 flex items-center gap-2">
                 📋 Auditoria de Negócios (Geração vs. Conversão)
-                <span title="Nossa 'Matriz de Geração' só contabiliza os negócios que de fato representam um handoff (uma passagem de bastão) do SDR para um Vendedor específico.">
-                    <FaQuestionCircle className="text-white/50" />
+                <span title="Nossa 'Matriz de Geração' só contabiliza os negócios que de fato representam um handoff (uma passagem de bastão) do SDR para um Vendedor específico." className="cursor-help">
+                    ❓
                 </span>
             </h3>
             <table className="w-full border-collapse text-sm" style={{ minWidth: '800px' }}>
