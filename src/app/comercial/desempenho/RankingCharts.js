@@ -82,7 +82,7 @@ export default function RankingCharts({ deals }) {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <RankingChart title="🏆 Vendedores (MRR)" data={vendedorRanking} />
-            <RankingChart title="🏆 SDRs (MRR)" data={sdrRanking} topN={5} />
+            <RankingChart title="🏆 TOP 5 SDRs (MRR)" data={sdrRanking} topN={5} />
         </div>
     );
 }
