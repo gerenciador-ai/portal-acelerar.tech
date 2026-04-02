@@ -2,7 +2,8 @@
 import Image from 'next/image';
 import { useComercial } from '../layout';
 import MvpCards from './MvpCards';
-import RankingCharts from './RankingCharts'; // 1. IMPORTA o novo componente de ranking
+import RankingCharts from './RankingCharts';
+import SdrFunnelChart from './SdrFunnelChart'; // 1. IMPORTA o novo componente de funil
 
 export default function DesempenhoPage() {
     const { filteredDeals, loading, error, selectedEmpresa, logoEmpresa } = useComercial();
@@ -10,6 +11,7 @@ export default function DesempenhoPage() {
     if (loading) return <p className="text-center p-10">Carregando dados do Ploomes...</p>;
     if (error) return <p className="text-center p-10 text-red-400">Erro: {error.message}</p>;
 
+    // 'vendas' é usado para MVPs e Rankings de MRR
     const vendas = filteredDeals.filter(deal => deal.status === 'Venda');
 
     return (
@@ -21,15 +23,11 @@ export default function DesempenhoPage() {
 
             <div className="space-y-6">
                 <MvpCards deals={vendas} />
-
-                {/* 2. SUBSTITUI o placeholder pelo componente real, passando os dados de vendas */}
+                
                 <RankingCharts deals={vendas} />
 
-                {/* Seção 3: Funil de SDRs (ainda como placeholder) */}
-                <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center">
-                    <p className="text-sm font-bold text-white/50">🚀 Funil de SDRs (Novos Negócios)</p>
-                    <p className="text-xs text-white/30 mt-1">(Área Reservada)</p>
-                </div>
+                {/* 2. SUBSTITUI o placeholder pelo componente real, passando TODOS os deals filtrados */}
+                <SdrFunnelChart deals={filteredDeals} />
 
                 {/* Seção 4: Tabela de Auditoria (ainda como placeholder) */}
                 <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center">
