@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useComercial } from '../layout';
+import OnboardingFunnelChart from './OnboardingFunnelChart'; // 1. IMPORTA o novo componente
 
 // --- Componente KpiCard (sem alterações) ---
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
@@ -84,11 +85,9 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    // Lógica de cálculo dos KPIs (com a correção no tempo médio)
     const { onboardingKpis } = useMemo(() => {
         if (loadingCS || onboardingDeals.length === 0) return { onboardingKpis: {} };
 
-        // --- KPIs de "Snapshot" ---
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
@@ -100,7 +99,6 @@ export default function CustomerSuccessPage() {
         const clientesEmOnboarding = dealsAtivosRecentes.length;
         const mrrEmOnboarding = dealsAtivosRecentes.reduce((sum, d) => sum + d.mrr, 0);
 
-        // --- KPIs de "Período" ---
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -111,9 +109,7 @@ export default function CustomerSuccessPage() {
         );
 
         const onboardingsConcluidos = dealsConcluidosNoPeriodo.length;
-
-        // --- AQUI ESTÁ A CORREÇÃO ---
-        // Soma os valores do campo 'diasNoFunil' dos negócios concluídos.
+        
         const somaDosDias = dealsConcluidosNoPeriodo.reduce((sum, d) => sum + (d.diasNoFunil || 0), 0);
         
         const tempoMedioOnboarding = onboardingsConcluidos > 0
@@ -161,7 +157,10 @@ export default function CustomerSuccessPage() {
                             <KpiCard title="Onboardings Concluídos" value={onboardingKpis.onboardingsConcluidos} icon="✅" legend="Período Selecionado" />
                             <KpiCard title="Tempo Médio (Concluídos)" value={onboardingKpis.tempoMedioOnboarding} icon="⏱️" format={formatDays} legend="Período Selecionado" />
                         </div>
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Gráfico: Funil de Etapas do Onboarding)</p></div>
+                        
+                        {/* 2. SUBSTITUI o placeholder pelo componente real */}
+                        <OnboardingFunnelChart deals={onboardingDeals} />
+
                         <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Clientes em Onboarding)</p></div>
                     </div>
                 )}
