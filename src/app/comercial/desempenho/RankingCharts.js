@@ -14,12 +14,12 @@ function RankingBar({ name, value, maxValue, index }) {
             ></div>
             <div className="relative w-full flex justify-between items-center px-3 text-sm">
                 <span className="font-bold text-white truncate drop-shadow-md">{`${index + 1}. ${name}`}</span>
-                <span className="font-semibold text-acelerar-light-blue drop-shadow-md">{formatCurrency(value)}</span>
+                {/* AQUI ESTÁ A ALTERAÇÃO */}
+                <span className="font-semibold text-white drop-shadow-md">{formatCurrency(value)}</span>
             </div>
         </div>
     );
 }
-
 // Componente para um único gráfico de ranking (Vendedor ou SDR)
 function RankingChart({ title, data, topN = null }) {
     // Ordena os dados por valor (MRR) e aplica o filtro topN se necessário
