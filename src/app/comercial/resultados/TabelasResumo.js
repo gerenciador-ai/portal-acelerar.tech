@@ -3,13 +3,21 @@ import { useState } from 'react';
 
 const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// Função para acessar dados aninhados (ex: 'Contact.CNPJ')
+const getNestedValue = (obj, path) => {
+    if (!path) return obj;
+    const properties = path.split('.');
+    return properties.reduce((prev, curr) => (prev && prev[curr]) ? prev[curr] : null, obj);
+};
+
 const exportToCSV = (data, headers, filename) => {
     const csvRows = [];
     csvRows.push(headers.map(h => h.label).join(';'));
 
     for (const row of data) {
         const values = headers.map(header => {
-            const value = row[header.key] || '';
+            const rawValue = getNestedValue(row, header.key);
+            const value = rawValue || '';
             if ((header.key === 'data' || header.key === 'data_churn') && value) {
                 return new Date(value).toLocaleDateString('pt-BR');
             }
@@ -53,11 +61,14 @@ const ResumoTable = ({ title, deals, headers, filename, isVenda }) => (
                     {deals && deals.length > 0 ? (
                         deals.map((deal, index) => (
                             <tr key={deal.id || index} className="border-b border-white/10 hover:bg-white/5">
-                                {headers.map(h => (
-                                    <td key={`${h.key}-${deal.id || index}`} className={`p-2 text-sm ${h.hidden || ''} ${h.isCurrency ? (isVenda ? 'text-green-400' : 'text-red-400') : ''} ${h.isCurrency ? 'font-bold' : ''}`}>
-                                        {h.isCurrency ? formatCurrency(deal[h.key]) : (h.isDate ? new Date(deal[h.key] || deal['data']).toLocaleDateString('pt-BR') : (deal[h.key] || 'N/A'))}
-                                    </td>
-                                ))}
+                                {headers.map(h => {
+                                    const value = getNestedValue(deal, h.key);
+                                    return (
+                                        <td key={`${h.key}-${deal.id || index}`} className={`p-2 text-sm ${h.hidden || ''} ${h.isCurrency ? (isVenda ? 'text-green-400' : 'text-red-400') : ''} ${h.isCurrency ? 'font-bold' : ''}`}>
+                                            {h.isCurrency ? formatCurrency(value) : (h.isDate ? new Date(value || deal['data']).toLocaleDateString('pt-BR') : (value || 'N/A'))}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))
                     ) : (
@@ -94,8 +105,8 @@ export default function TabelasResumo({ tableData }) {
         { key: 'data_churn', label: 'Data Churn', isDate: true },
         { key: 'CNPJ', label: 'CNPJ' },
         { key: 'cliente', label: 'Cliente' },
-        { key: 'Vendedor Original', label: 'Vendedor', hidden: 'hidden md:table-cell' },
-        { key: 'SDR Original', label: 'SDR', hidden: 'hidden lg:table-cell' },
+        { key: 'vendedorOriginal', label: 'Vendedor', hidden: 'hidden md:table-cell' },
+        { key: 'sdrOriginal', label: 'SDR', hidden: 'hidden lg:table-cell' },
         { key: 'produto', label: 'Produto', hidden: 'hidden md:table-cell' },
         { key: 'mrr', label: 'MRR Perdido', isCurrency: true },
     ];
