@@ -12,7 +12,7 @@ function FunnelBar({ name, count, maxValue }) {
                 className="h-8 bg-gradient-to-r from-acelerar-dark-blue to-acelerar-light-blue/80 rounded-md flex justify-center items-center px-4"
                 style={{ width: `${percentage}%` }}
             >
-                <span className="text-white font-bold text-sm truncate drop-shadow-md">
+                <span className="text-white font-bold text-sm whitespace-nowrap drop-shadow-md">
                     {name} ({count})
                 </span>
             </div>
