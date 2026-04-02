@@ -2,13 +2,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { useComercial } from '../layout'; // O hook agora traz os filtros
+import { useComercial } from '../layout';
 
-// --- Componentes Dinâmicos (sem alterações) ---
 const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
 const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
 
-// --- Componentes Visuais (sem alterações) ---
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg text-center flex flex-col justify-between">
@@ -21,14 +19,12 @@ function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' })
     );
 }
 
-// --- Página de Resultados (Refatorada com Lógica de Dados Própria) ---
 export default function ResultadosPage() {
-    // 1. ESTADOS DE DADOS AGORA SÃO LOCAIS DESTA PÁGINA
+    // 1. ESTADO LOCAL PARA ARMAZENAR OS DADOS COMBINADOS
     const [allDeals, setAllDeals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // 2. RECEBE APENAS OS FILTROS E SETTERS DO CONTEXTO DO LAYOUT
     const { 
         selectedEmpresa, logoEmpresa, 
         setAnos, setSelectedAno, selectedAno,
@@ -39,18 +35,52 @@ export default function ResultadosPage() {
         MESES_ORDEM
     } = useComercial();
 
-    // 3. LÓGICA DE BUSCA DE DADOS DE VENDAS (MOVIDA DO LAYOUT PARA CÁ)
+    // 2. LÓGICA DE BUSCA DE DADOS ATUALIZADA
     useEffect(() => {
         if (!selectedEmpresa) return;
         const fetchData = async () => {
             try {
-                setLoading(true); setError(null);
-                // Busca apenas os dados de Vendas
-                const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=vendas`);
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Falha ao buscar dados');
-                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
-                setAllDeals(dealsComData);
+                setLoading(true);
+                setError(null);
+
+                // Busca dados de Vendas e Churn em paralelo
+                const [vendasRes, churnRes] = await Promise.all([
+                    fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=vendas`),
+                    fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=churn`)
+                ]);
+
+                if (!vendasRes.ok || !churnRes.ok) {
+                    throw new Error('Falha ao buscar dados de Vendas ou Churn.');
+                }
+
+                const vendasData = await vendasRes.json();
+                const churnData = await churnRes.json();
+
+                const vendasComData = vendasData.value.map(d => ({ ...d, data: new Date(d.data) }));
+                let churnComData = churnData.value.map(d => ({ ...d, data: new Date(d.data) }));
+
+                // 3. LÓGICA DE ENRIQUECIMENTO DO CHURN (MOVIDA DA API PARA CÁ)
+                const dataMap = new Map();
+                for (const venda of vendasComData) {
+                    if (venda.contactId && venda.status === 'Venda') {
+                        if (!dataMap.has(venda.contactId) || new Date(venda.data) > new Date(dataMap.get(venda.contactId).data)) {
+                            dataMap.set(venda.contactId, { mrr: venda.mrr, vendedor: venda.vendedor, sdr: venda.sdr, data: venda.data });
+                        }
+                    }
+                }
+
+                churnComData = churnComData.map(churn => {
+                    if (churn.contactId && dataMap.has(churn.contactId)) {
+                        const originalData = dataMap.get(churn.contactId);
+                        return { ...churn, mrr: originalData.mrr, vendedor: originalData.vendedor, sdr: originalData.sdr };
+                    }
+                    return churn;
+                });
+
+                // Combina os dados de vendas (apenas os ganhos) com os de churn (já enriquecidos)
+                const vendasGanha = vendasComData.filter(v => v.status === 'Venda');
+                setAllDeals([...vendasGanha, ...churnComData]);
+
             } catch (err) {
                 setError(err);
             } finally {
@@ -60,7 +90,7 @@ export default function ResultadosPage() {
         fetchData();
     }, [selectedEmpresa]);
 
-    // 4. LÓGICA PARA ATUALIZAR OS FILTROS (MOVIDA DO LAYOUT PARA CÁ)
+    // Lógica para popular os filtros (sem alterações)
     useEffect(() => {
         if (allDeals.length === 0) return;
         const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
@@ -81,9 +111,9 @@ export default function ResultadosPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, allDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    // 5. LÓGICA DE FILTRAGEM (usa os estados locais e os filtros do contexto)
+    // Lógica de filtragem (sem alterações)
     const filteredDeals = useMemo(() => {
-        if (loading || allDeals.length === 0) return [];
+        if (loading || allDeals.length === 0 || selectedMeses.length === 0) return [];
         return allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
@@ -93,8 +123,9 @@ export default function ResultadosPage() {
         );
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
 
-    // 6. LÓGICA DE CÁLCULO DOS KPIs (sem alterações, apenas usa os dados locais)
+    // Lógica de cálculo dos KPIs (sem alterações)
     const { kpis, chartData, tableData } = useMemo(() => {
+        // ... (nenhuma alteração necessária aqui, pois `filteredDeals` já contém os dados corretos)
         if (!filteredDeals || filteredDeals.length === 0) {
             return { kpis: {}, chartData: null, tableData: null };
         }
@@ -149,7 +180,6 @@ export default function ResultadosPage() {
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
 
-    // 7. RENDERIZAÇÃO (usa o estado de loading local)
     if (loading) return <p className="text-center p-10">Carregando dados de Resultados...</p>;
     if (error) return <p className="text-center p-10 text-red-400">Erro: {error.message}</p>;
 
