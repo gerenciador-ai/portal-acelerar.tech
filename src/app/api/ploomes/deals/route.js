@@ -67,7 +67,7 @@ function processDeal(deal, type) {
         cliente: deal.Title,
         // CORREÇÃO APLICADA: Adiciona o campo CNPJ, extraindo-o do objeto Contact.
         // O "?." (optional chaining) garante que o código não quebre se deal.Contact for nulo.
-        CNPJ: deal.Contact?.CNPJ || 'N/A',
+        CNPJ: deal.Contact.CNPJ || 'N/A',
         data: new Date(date),
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A',
