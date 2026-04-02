@@ -4,10 +4,10 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import ClientOnlyWrapper from '@/components/ClientOnlyWrapper';
-import { processAndFilterData } from '@/lib/dataProcessor';
+// import { processAndFilterData } from '@/lib/dataProcessor'; // CORREÇÃO: Linha removida para evitar o erro de build.
 
 // --- Componentes ---
-import RankingCards from './RankingCards'; // CORREÇÃO: Importa o componente recém-criado
+import RankingCards from './RankingCards';
 // import FunilSdr from './FunilSdr';
 // import AuditoriaTable from './AuditoriaTable';
 
@@ -41,11 +41,12 @@ export default function DesempenhoPage() {
 
     const filteredData = useMemo(() => {
         if (!apiData || !apiData.value) return null;
-        // Assumindo que a função processAndFilterData será criada/adaptada em @/lib/dataProcessor.js
-        // Por enquanto, vamos apenas filtrar por status 'Venda' para os rankings
+        
+        // A lógica de filtro agora vive aqui.
+        // Por enquanto, apenas filtra por 'Venda', como planejado para a Etapa 1.
         const vendas = apiData.value.filter(d => d.status === 'Venda');
-        return vendas; // Simplificação temporária
-        // return processAndFilterData(apiData.value, searchParams);
+        return vendas; 
+        
     }, [apiData, searchParams]);
 
     if (error) return <ErrorComponent message={error.message} />;
@@ -58,7 +59,6 @@ export default function DesempenhoPage() {
         <ClientOnlyWrapper>
             <div className="space-y-6">
                 
-                {/* CORREÇÃO APLICADA: O placeholder foi substituído pelo componente real */}
                 <RankingCards data={filteredData} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
