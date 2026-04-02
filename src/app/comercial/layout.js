@@ -3,11 +3,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useState, createContext, useContext } from 'react';
 
-// --- Contexto para compartilhar APENAS filtros e estados globais ---
 const ComercialContext = createContext(null);
 export const useComercial = () => useContext(ComercialContext);
 
-// --- Componentes do Layout (sem alterações) ---
 function NavLink({ href, children }) {
     const pathname = usePathname();
     const isActive = pathname.startsWith(href);
@@ -31,14 +29,9 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
 
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-// --- O Layout Principal do Módulo Comercial (Refatorado) ---
 export default function ComercialLayout({ children }) {
     const router = useRouter();
     
-    // --- ESTADOS DE DADOS REMOVIDOS ---
-    // A lógica de allDeals, loading e error foi movida para as páginas filhas.
-
-    // --- ESTADOS DE FILTRO MANTIDOS ---
     const [selectedEmpresa, setSelectedEmpresa] = useState('VMC Tech');
     const [anos, setAnos] = useState([new Date().getFullYear()]);
     const [selectedAno, setSelectedAno] = useState(new Date().getFullYear());
@@ -53,7 +46,7 @@ export default function ComercialLayout({ children }) {
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    // O valor do contexto agora compartilha os filtros e os setters para que as páginas filhas possam atualizá-los.
+    // CORREÇÃO: Passando os setters (setAnos, setMeses, etc.) para o contexto
     const contextValue = {
         selectedEmpresa, setSelectedEmpresa,
         anos, setAnos,
