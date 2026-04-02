@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useComercial } from '../layout';
-import OnboardingFunnelChart from './OnboardingFunnelChart'; // 1. IMPORTA o novo componente
+import OnboardingFunnelChart from './OnboardingFunnelChart';
 
 // --- Componente KpiCard (sem alterações) ---
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
@@ -85,20 +85,26 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    const { onboardingKpis } = useMemo(() => {
-        if (loadingCS || onboardingDeals.length === 0) return { onboardingKpis: {} };
+    // --- LÓGICA DE CÁLCULO CENTRALIZADA ---
+    const { onboardingKpis, dealsAtivosRecentes } = useMemo(() => {
+        if (loadingCS || onboardingDeals.length === 0) {
+            return { onboardingKpis: {}, dealsAtivosRecentes: [] };
+        }
 
+        // 1. CALCULA A LISTA DE CLIENTES ATIVOS EM UM ÚNICO LUGAR
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
 
-        const dealsAtivosRecentes = onboardingDeals.filter(d => 
+        const activeDeals = onboardingDeals.filter(d => 
             d.status === 'Aberto' && d.dataCriacao > dataLimite
         );
 
-        const clientesEmOnboarding = dealsAtivosRecentes.length;
-        const mrrEmOnboarding = dealsAtivosRecentes.reduce((sum, d) => sum + d.mrr, 0);
+        // --- KPIs de "Snapshot" (usam a lista de ativos) ---
+        const clientesEmOnboarding = activeDeals.length;
+        const mrrEmOnboarding = activeDeals.reduce((sum, d) => sum + d.mrr, 0);
 
+        // --- KPIs de "Período" (usam a lista completa e os filtros) ---
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -116,11 +122,13 @@ export default function CustomerSuccessPage() {
             ? somaDosDias / onboardingsConcluidos
             : 0;
 
+        // 2. RETORNA TANTO OS KPIs QUANTO A LISTA DE ATIVOS
         return {
             onboardingKpis: {
                 clientesEmOnboarding, mrrEmOnboarding,
                 onboardingsConcluidos, tempoMedioOnboarding,
-            }
+            },
+            dealsAtivosRecentes: activeDeals 
         };
     }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]);
 
@@ -158,8 +166,8 @@ export default function CustomerSuccessPage() {
                             <KpiCard title="Tempo Médio (Concluídos)" value={onboardingKpis.tempoMedioOnboarding} icon="⏱️" format={formatDays} legend="Período Selecionado" />
                         </div>
                         
-                        {/* 2. SUBSTITUI o placeholder pelo componente real */}
-                        <OnboardingFunnelChart deals={onboardingDeals} />
+                        {/* 3. PASSA A LISTA JÁ FILTRADA PARA O GRÁFICO */}
+                        <OnboardingFunnelChart activeDeals={dealsAtivosRecentes} />
 
                         <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Clientes em Onboarding)</p></div>
                     </div>
@@ -167,14 +175,7 @@ export default function CustomerSuccessPage() {
 
                 {activeTab === 'ongoing' && (
                     <div className="space-y-6 animate-fade-in">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Clientes Ativos)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR Ativo)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Health Score Médio)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR em Risco)</p></div>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Gráfico: Saúde da Carteira)</p></div>
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Atividades e Engajamento)</p></div>
+                        {/* ... (placeholders de ongoing) ... */}
                     </div>
                 )}
             </div>
