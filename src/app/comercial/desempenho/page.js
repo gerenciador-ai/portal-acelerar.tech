@@ -3,8 +3,9 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import ClientOnlyWrapper from '@/components/ClientOnlyWrapper';
-// import { processAndFilterData } from '@/lib/dataProcessor'; // CORREÇÃO: Linha removida para evitar o erro de build.
+// CORREÇÃO APLICADA: O caminho do import foi alterado para um caminho relativo.
+import ClientOnlyWrapper from '../../../components/ClientOnlyWrapper'; 
+// import { processAndFilterData } from '@/lib/dataProcessor';
 
 // --- Componentes ---
 import RankingCards from './RankingCards';
@@ -42,8 +43,6 @@ export default function DesempenhoPage() {
     const filteredData = useMemo(() => {
         if (!apiData || !apiData.value) return null;
         
-        // A lógica de filtro agora vive aqui.
-        // Por enquanto, apenas filtra por 'Venda', como planejado para a Etapa 1.
         const vendas = apiData.value.filter(d => d.status === 'Venda');
         return vendas; 
         
@@ -62,7 +61,6 @@ export default function DesempenhoPage() {
                 <RankingCards data={filteredData} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* ETAPA 2: Será preenchido com <FunilSdr data={filteredData} /> */}
                     <div className="p-4 bg-gray-800/20 rounded-lg border border-dashed border-gray-600">
                         <p className="text-center text-gray-400 text-sm">Área reservada para o Funil de SDRs.</p>
                     </div>
@@ -72,7 +70,6 @@ export default function DesempenhoPage() {
                     </div>
                 </div>
 
-                {/* ETAPA 3: Será preenchido com <AuditoriaTable data={filteredData} /> */}
                 <div className="p-4 bg-gray-800/20 rounded-lg border border-dashed border-gray-600">
                     <p className="text-center text-gray-400 text-sm">Área reservada para a Tabela de Auditoria de Negócios Convertidos.</p>
                 </div>
