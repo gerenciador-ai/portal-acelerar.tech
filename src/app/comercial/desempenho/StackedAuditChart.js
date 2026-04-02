@@ -62,7 +62,7 @@ export default function StackedAuditChart({ deals }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg">
             <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-4">
-                📊 Composição de Vendas por Vendedor
+                📊 Distribuição de negócios convertidos (SDR vs Vendedor)
             </h3>
             
             {/* Gráfico */}
