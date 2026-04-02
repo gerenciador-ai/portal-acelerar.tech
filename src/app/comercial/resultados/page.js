@@ -3,9 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
-const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
-const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
-
+// ... (Componentes KpiCard e FilterSelect permanecem os mesmos) ...
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg text-center flex flex-col justify-between">
@@ -29,10 +27,14 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
     );
 }
 
+
+const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
+const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
+
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 export default function ResultadosPage() {
-    const [allDeals, setAllDeals] = useState([]);
+    const [rawDeals, setRawDeals] = useState([]); // Armazena os dados brutos da API
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedEmpresa, setSelectedEmpresa] = useState('VMC Tech');
@@ -54,8 +56,7 @@ export default function ResultadosPage() {
                 const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Falha ao buscar dados');
-                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
-                setAllDeals(dealsComData);
+                setRawDeals(data.value); // Armazena os dados brutos
             } catch (err) {
                 setError(err);
             } finally {
@@ -65,31 +66,60 @@ export default function ResultadosPage() {
         fetchData();
     }, [selectedEmpresa]);
 
+    // Este useMemo processa os dados brutos e os transforma no formato que os componentes precisam
+    const processedData = useMemo(() => {
+        if (!rawDeals || rawDeals.length === 0) return [];
+
+        return rawDeals.map(deal => {
+            // Função para encontrar um valor em OtherProperties
+            const getOtherProp = (key) => {
+                const prop = deal.OtherProperties?.find(p => p.FieldKey === key);
+                return prop?.StringValue || null;
+            };
+
+            return {
+                id: deal.Id,
+                contactId: deal.Contact?.Id,
+                data: new Date(deal.CreateDate),
+                data_churn: getOtherProp('deal_custom_fields_256') ? new Date(getOtherProp('deal_custom_fields_256')) : null,
+                cliente: deal.Contact?.Name,
+                CNPJ: deal.Contact?.CNPJ,
+                vendedor: deal.Owner?.Name,
+                sdr: getOtherProp('deal_custom_fields_255'),
+                produto: getOtherProp('deal_custom_fields_252'),
+                mrr: deal.Amount,
+                adesao: parseFloat(getOtherProp('deal_custom_fields_253') || 0),
+                upsell: parseFloat(getOtherProp('deal_custom_fields_254') || 0),
+                status: deal.Stage.Name,
+            };
+        });
+    }, [rawDeals]);
+
     useEffect(() => {
-        if (allDeals.length === 0) return;
-        const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
+        if (processedData.length === 0) return;
+        const anosUnicos = [...new Set(processedData.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
         setAnos(anosUnicos);
         if (!anosUnicos.includes(selectedAno)) setSelectedAno(anosUnicos[0] || new Date().getFullYear());
-        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(allDeals.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
+        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(processedData.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
         setProdutos(getUniqueAndSorted('produto'));
         setVendedores(getUniqueAndSorted('vendedor'));
         setSdrs(getUniqueAndSorted('sdr'));
-    }, [allDeals]);
+    }, [processedData]);
 
     useEffect(() => {
-        if (allDeals.length === 0 || !selectedAno) return;
-        const mesesDoAno = [...new Set(allDeals.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
+        if (processedData.length === 0 || !selectedAno) return;
+        const mesesDoAno = [...new Set(processedData.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
         const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')).sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
         setMeses(mesesNomes);
         setSelectedMeses(mesesNomes);
-    }, [selectedAno, allDeals]);
+    }, [selectedAno, processedData]);
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
     const { kpis, chartData, tableData } = useMemo(() => {
-        if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
+        if (loading || processedData.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
-        const dealsFiltrados = allDeals.filter(d =>
+        const dealsFiltrados = processedData.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
             (selectedProduto === 'Todos' || d.produto === selectedProduto) &&
@@ -97,10 +127,21 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
-        // LÓGICA SIMPLIFICADA: Apenas filtramos, sem lógicas complexas.
-        const vendas = dealsFiltrados.filter(d => d.status === 'Venda');
-        const cancelados = dealsFiltrados.filter(d => d.status === 'Churn');
+        const vendas = dealsFiltrados.filter(d => d.status === 'Ganho');
+        const canceladosBrutos = dealsFiltrados.filter(d => d.status === 'Perdido (Churn)');
 
+        // LÓGICA DO CHURN - IMPLEMENTANDO SUA DEDUÇÃO
+        const cancelados = canceladosBrutos.map(churnDeal => {
+            // Encontra a venda original para o mesmo Contact.Id
+            const vendaOriginal = processedData.find(d => d.status === 'Ganho' && d.contactId === churnDeal.contactId);
+            return {
+                ...churnDeal,
+                vendedorOriginal: vendaOriginal ? vendaOriginal.vendedor : 'N/A',
+                sdrOriginal: vendaOriginal ? vendaOriginal.sdr : 'N/A',
+            };
+        });
+
+        // ... (Restante da lógica de KPIs e Gráficos permanece a mesma) ...
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const kpisCalculados = {
@@ -109,7 +150,7 @@ export default function ResultadosPage() {
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
             adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
             clientesFechados: vendas.length, clientesCancelados: cancelados.length,
-            carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
+            carteiraAtiva: processedData.filter(d => d.status === 'Ganho').length - processedData.filter(d => d.status === 'Perdido (Churn)').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
@@ -117,8 +158,8 @@ export default function ResultadosPage() {
         const labels = MESES_ORDEM.filter(mes => selectedMeses.includes(mes));
         const monthlyData = labels.map(mes => {
             const dealsDoMes = dealsFiltrados.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
-            const vendasDoMes = dealsDoMes.filter(d => d.status === 'Venda');
-            const churnDoMes = dealsDoMes.filter(d => d.status === 'Churn');
+            const vendasDoMes = dealsDoMes.filter(d => d.status === 'Ganho');
+            const churnDoMes = dealsDoMes.filter(d => d.status === 'Perdido (Churn)');
             return {
                 mes,
                 mrr: vendasDoMes.reduce((sum, d) => sum + (d.mrr || 0), 0),
@@ -144,17 +185,19 @@ export default function ResultadosPage() {
             };
         });
 
+
         return { 
             kpis: kpisCalculados, 
             chartData: { monthlyData, accumulatedData },
             tableData: { vendas, cancelados }
         };
-    }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
+    }, [loading, processedData, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr, selectedEmpresa]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const logoEmpresa = selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png';
 
     return (
+        // ... (O JSX da página para renderizar os filtros e os componentes permanece o mesmo) ...
         <div className="flex h-full">
             <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} disabled={loading} />
