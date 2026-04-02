@@ -1,65 +1,66 @@
 "use client";
 import { useMemo } from 'react';
+// A linha de importação do 'react-icons/fa' foi REMOVIDA.
 
-// Componente para a célula da tabela com barra de dados
-function DataCell({ value, maxValue }) {
-    const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
-    const bgColor = value > 0 ? 'bg-acelerar-light-blue/70' : 'bg-transparent';
+// Componente principal da nova tabela de auditoria
+export default function AuditTable({ dealsGanhos, dealsGerados }) {
+    const { 
+        matrixGerados, matrixGanhos, 
+        sdrList, vendedorList, 
+        sdrTotals, vendedorTotals, 
+        grandTotal 
+    } = useMemo(() => {
+        const processDeals = (deals, filterByVendedor = false) => {
+            const matrix = {};
+            const sdrTotals = {};
+            const vendedorTotals = {};
+            let grandTotal = 0;
+            const sdrSet = new Set();
+            const vendedorSet = new Set();
 
-    return (
-        <td className="p-0 text-center border-l border-white/10">
-            <div className="relative h-full w-full flex items-center justify-center">
-                <div 
-                    className={`absolute left-0 top-0 h-full ${bgColor}`}
-                    style={{ width: `${percentage}%` }}
-                ></div>
-                <span className="relative font-semibold text-white">{value}</span>
-            </div>
-        </td>
-    );
-}
+            deals.forEach(deal => {
+                if (deal.sdr && deal.vendedor && deal.sdr !== 'N/A' && deal.vendedor !== 'N/A') {
+                    sdrSet.add(deal.sdr);
+                    vendedorSet.add(deal.vendedor);
 
-// Componente principal da tabela de auditoria
-export default function AuditTable({ deals }) {
-    const { matrix, sdrList, vendedorList, sdrTotals, vendedorTotals, grandTotal } = useMemo(() => {
-        if (!deals || deals.length === 0) {
-            return { matrix: {}, sdrList: [], vendedorList: [], sdrTotals: {}, vendedorTotals: {}, grandTotal: 0 };
-        }
+                    const key = `${deal.sdr}|${deal.vendedor}`;
+                    matrix[key] = (matrix[key] || 0) + 1;
 
-        const sdrSet = new Set();
-        const vendedorSet = new Set();
-        const matrix = {};
-        const sdrTotals = {};
-        const vendedorTotals = {};
-        let grandTotal = 0;
+                    sdrTotals[deal.sdr] = (sdrTotals[deal.sdr] || 0) + 1;
+                    vendedorTotals[deal.vendedor] = (vendedorTotals[deal.vendedor] || 0) + 1;
+                    grandTotal++;
+                } else if (!filterByVendedor && deal.sdr && deal.sdr !== 'N/A') {
+                    sdrSet.add(deal.sdr);
+                }
+            });
+            return { matrix, sdrTotals, vendedorTotals, grandTotal, sdrSet, vendedorSet };
+        };
 
-        deals.forEach(deal => {
-            if (deal.sdr && deal.vendedor && deal.sdr !== 'N/A' && deal.vendedor !== 'N/A') {
-                sdrSet.add(deal.sdr);
-                vendedorSet.add(deal.vendedor);
+        const ganhos = processDeals(dealsGanhos, true);
+        const gerados = processDeals(dealsGerados, false);
 
-                const key = `${deal.sdr}|${deal.vendedor}`;
-                matrix[key] = (matrix[key] || 0) + 1;
+        const combinedSdrSet = new Set([...gerados.sdrSet, ...ganhos.sdrSet]);
+        const combinedVendedorSet = new Set([...gerados.vendedorSet, ...ganhos.vendedorSet]);
 
-                sdrTotals[deal.sdr] = (sdrTotals[deal.sdr] || 0) + 1;
-                vendedorTotals[deal.vendedor] = (vendedorTotals[deal.vendedor] || 0) + 1;
-                grandTotal++;
-            }
-        });
+        const sdrList = Array.from(combinedSdrSet).sort();
+        const vendedorList = Array.from(combinedVendedorSet).sort();
 
-        const sdrList = Array.from(sdrSet).sort();
-        const vendedorList = Array.from(vendedorSet).sort();
-
-        return { matrix, sdrList, vendedorList, sdrTotals, vendedorTotals, grandTotal };
-    }, [deals]);
-
-    const maxCellValue = Math.max(...Object.values(matrix), 0);
+        return {
+            matrixGanhos: ganhos.matrix,
+            matrixGerados: gerados.matrix,
+            sdrList,
+            vendedorList,
+            sdrTotals: { ganhos: ganhos.sdrTotals, gerados: gerados.sdrTotals },
+            vendedorTotals: { ganhos: ganhos.vendedorTotals, gerados: gerados.vendedorTotals },
+            grandTotal: { ganhos: ganhos.grandTotal, gerados: gerados.grandTotal }
+        };
+    }, [dealsGanhos, dealsGerados]);
 
     if (sdrList.length === 0 || vendedorList.length === 0) {
         return (
              <div className="bg-white/10 p-4 rounded-lg">
-                <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-2">
-                    📋 Auditoria de Negócios Convertidos (Ganhos)
+                <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-2 flex items-center gap-2">
+                    📋 Auditoria de Negócios (Geração vs. Conversão)
                 </h3>
                 <p className="text-center text-sm text-white/40 pt-8">Sem dados de interação SDR/Vendedor para exibir.</p>
             </div>
@@ -68,41 +69,70 @@ export default function AuditTable({ deals }) {
 
     return (
         <div className="bg-white/10 p-4 rounded-lg overflow-x-auto">
-            <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-4">
-                📋 Auditoria de Negócios Convertidos (Ganhos)
+            <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-4 flex items-center gap-2">
+                📋 Auditoria de Negócios (Geração vs. Conversão)
+                {/* AQUI ESTÁ A CORREÇÃO: Usando emoji e sem o componente de ícone */}
+                <span title="Nossa 'Matriz de Geração' só contabiliza os negócios que de fato representam um handoff (uma passagem de bastão) do SDR para um Vendedor específico." className="cursor-help">
+                    ❓
+                </span>
             </h3>
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-sm" style={{ minWidth: '800px' }}>
                 <thead>
-                    <tr className="bg-white/10">
-                        <th className="p-2 text-left font-bold text-white/80 border-b border-white/10">SDR / Vendedor</th>
+                    <tr>
+                        <th rowSpan="2" className="p-2 text-left font-bold text-white/80 border-b-2 border-white/20 align-bottom">SDR / Vendedor</th>
                         {vendedorList.map(vendedor => (
-                            <th key={vendedor} className="p-2 font-bold text-white/80 border-b border-l border-white/10">{vendedor}</th>
+                            <th key={vendedor} colSpan="2" className="p-2 font-bold text-white/80 border-b border-l border-white/10 text-center">{vendedor}</th>
                         ))}
-                        <th className="p-2 font-bold text-acelerar-gold-light border-b border-l border-white/10">TOTAL</th>
+                        <th colSpan="3" className="p-2 font-bold text-acelerar-gold-light border-b border-l border-white/10 text-center">TOTAL</th>
+                    </tr>
+                    <tr className="bg-white/5">
+                        {vendedorList.map(vendedor => (
+                            <>
+                                <th key={`${vendedor}-ger`} className="p-1.5 font-semibold text-white/60 border-b-2 border-l border-white/10">Ger.</th>
+                                <th key={`${vendedor}-conv`} className="p-1.5 font-semibold text-white/60 border-b-2 border-l border-white/10 bg-acelerar-dark-blue/20">Conv.</th>
+                            </>
+                        ))}
+                        <th className="p-1.5 font-semibold text-acelerar-gold-light/80 border-b-2 border-l border-white/10">Ger.</th>
+                        <th className="p-1.5 font-semibold text-acelerar-gold-light/80 border-b-2 border-l border-white/10 bg-acelerar-dark-blue/20">Conv.</th>
+                        <th className="p-1.5 font-semibold text-acelerar-gold-light/80 border-b-2 border-l border-white/10">Tx. %</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {sdrList.map(sdr => (
-                        <tr key={sdr} className="border-b border-white/10 h-10">
-                            <td className="p-2 font-bold text-white">{sdr}</td>
-                            {vendedorList.map(vendedor => (
-                                <DataCell 
-                                    key={`${sdr}-${vendedor}`}
-                                    value={matrix[`${sdr}|${vendedor}`] || 0}
-                                    maxValue={maxCellValue}
-                                />
-                            ))}
-                            <td className="p-2 text-center font-bold text-acelerar-gold-light bg-white/10 border-l border-white/10">{sdrTotals[sdr] || 0}</td>
-                        </tr>
-                    ))}
+                    {sdrList.map(sdr => {
+                        const totalGerado = sdrTotals.gerados[sdr] || 0;
+                        const totalGanho = sdrTotals.ganhos[sdr] || 0;
+                        const txConversao = totalGerado > 0 ? ((totalGanho / totalGerado) * 100).toFixed(1) : '0.0';
+                        
+                        return (
+                            <tr key={sdr} className="border-b border-white/10 h-10 hover:bg-white/5">
+                                <td className="p-2 font-bold text-white">{sdr}</td>
+                                {vendedorList.map(vendedor => (
+                                    <>
+                                        <td key={`${sdr}-${vendedor}-ger`} className="text-center font-medium text-white/80 border-l border-white/10">{matrixGerados[`${sdr}|${vendedor}`] || 0}</td>
+                                        <td key={`${sdr}-${vendedor}-conv`} className="text-center font-bold text-white border-l border-white/10 bg-acelerar-dark-blue/20">{matrixGanhos[`${sdr}|${vendedor}`] || 0}</td>
+                                    </>
+                                ))}
+                                <td className="text-center font-medium text-acelerar-gold-light/80 border-l border-white/10">{totalGerado}</td>
+                                <td className="text-center font-bold text-acelerar-gold-light border-l border-white/10 bg-acelerar-dark-blue/20">{totalGanho}</td>
+                                <td className={`text-center font-bold border-l border-white/10 ${parseFloat(txConversao) > 50 ? 'text-green-400' : 'text-amber-400'}`}>{txConversao}%</td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
                 <tfoot>
                     <tr className="bg-white/10 h-10">
                         <td className="p-2 font-bold text-acelerar-gold-light">TOTAL</td>
                         {vendedorList.map(vendedor => (
-                            <td key={vendedor} className="p-2 text-center font-bold text-acelerar-gold-light border-l border-white/10">{vendedorTotals[vendedor] || 0}</td>
+                            <>
+                                <td key={`${vendedor}-total-ger`} className="text-center font-bold text-acelerar-gold-light/80 border-l border-white/10">{vendedorTotals.gerados[vendedor] || 0}</td>
+                                <td key={`${vendedor}-total-conv`} className="text-center font-bold text-acelerar-gold-light border-l border-white/10 bg-acelerar-dark-blue/20">{vendedorTotals.ganhos[vendedor] || 0}</td>
+                            </>
                         ))}
-                        <td className="p-2 text-center font-extrabold text-white bg-acelerar-gold-light/80 border-l border-white/10">{grandTotal}</td>
+                        <td className="text-center font-bold text-acelerar-gold-light/80 border-l border-white/10">{grandTotal.gerados}</td>
+                        <td className="text-center font-bold text-acelerar-gold-light border-l border-white/10 bg-acelerar-dark-blue/20">{grandTotal.ganhos}</td>
+                        <td className={`text-center font-extrabold border-l border-white/10 ${((grandTotal.ganhos / grandTotal.gerados) * 100) > 50 ? 'text-green-400' : 'text-amber-400'}`}>
+                            {grandTotal.gerados > 0 ? `${((grandTotal.ganhos / grandTotal.gerados) * 100).toFixed(1)}%` : '0.0%'}
+                        </td>
                     </tr>
                 </tfoot>
             </table>
