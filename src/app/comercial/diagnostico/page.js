@@ -1,42 +1,37 @@
 "use client";
 import { useState, useEffect } from 'react';
 
-// Esta é uma página de diagnóstico para inspecionar os dados brutos da API do Ploomes.
+// Página de diagnóstico para inspecionar dados brutos de IDs específicos.
 export default function DiagnosticoPage() {
     const [deals, setDeals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // IDs específicos para o teste, conforme solicitado.
+    const DEAL_IDS_PARA_TESTE = [
+        '1105560652',
+        '1105651119',
+        '1105748145'
+    ];
+
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Filtros exatos solicitados para o diagnóstico
-                const empresa = 'VMC Tech';
-                const ano = 2026;
-                const mes = 3; // Março é o mês 3 (Janeiro = 1)
-
                 setLoading(true);
                 setError(null);
                 
-                // Chamada à API que busca todos os deals da empresa
-                const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(empresa)}`);
+                // Converte o array de IDs em uma string separada por vírgulas.
+                const idsQueryParam = DEAL_IDS_PARA_TESTE.join(',');
+
+                // Chama a nossa API, passando os IDs como parâmetro.
+                const response = await fetch(`/api/ploomes/deals?ids=${idsQueryParam}`);
                 const data = await response.json();
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Falha ao buscar dados da API');
                 }
 
-                // Filtra os dados aqui no cliente para corresponder ao critério exato
-                const filteredDeals = data.value.filter(deal => {
-                    const dealDate = new Date(deal.data);
-                    return (
-                        deal.status === 'Venda' &&
-                        dealDate.getFullYear() === ano &&
-                        (dealDate.getMonth() + 1) === mes // getMonth() é 0-11, então somamos 1
-                    );
-                });
-
-                setDeals(filteredDeals);
+                setDeals(data.value);
 
             } catch (err) {
                 setError(err.message);
@@ -46,12 +41,12 @@ export default function DiagnosticoPage() {
         };
 
         fetchData();
-    }, []); // Executa apenas uma vez ao carregar a página
+    }, []); // Executa apenas uma vez.
 
     return (
         <div className="p-8 bg-gray-900 text-white min-h-screen font-mono">
             <h1 className="text-2xl font-bold text-yellow-400 mb-4">Página de Diagnóstico - API Ploomes</h1>
-            <p className="text-gray-400 mb-6">Exibindo dados brutos para: <span className="font-bold">VMC Tech</span> | <span className="font-bold">Março/2026</span> | <span className="font-bold">Clientes Fechados</span></p>
+            <p className="text-gray-400 mb-6">Exibindo dados brutos para 3 IDs específicos.</p>
 
             {loading && <p className="text-blue-400">Buscando dados na API do Ploomes...</p>}
             
@@ -60,9 +55,8 @@ export default function DiagnosticoPage() {
             {!loading && !error && (
                 <div>
                     <h2 className="text-xl text-green-400 mb-4">
-                        {deals.length} registros encontrados.
+                        {deals.length} de 3 registros encontrados.
                     </h2>
-                    {/* Exibe cada "deal" como um bloco de texto JSON */}
                     {deals.map(deal => (
                         <div key={deal.id} className="bg-gray-800 p-4 rounded-lg mb-4 border border-gray-700">
                             <pre className="whitespace-pre-wrap text-sm">
