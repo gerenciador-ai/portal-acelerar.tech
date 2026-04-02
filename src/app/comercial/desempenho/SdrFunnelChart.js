@@ -3,13 +3,26 @@ import { useMemo } from 'react';
 
 // Componente para uma única barra do funil
 function FunnelBar({ name, count, maxValue }) {
-    // A largura da barra é relativa ao SDR com mais negócios
-    const percentage = maxValue > 0 ? (count / maxValue) * 100 : 0;
+    // --- LÓGICA DE CÁLCULO DA LARGURA ALTERADA ---
+    const minWidthPercentage = 25; // Garante que a menor barra tenha pelo menos 25% da largura total
+    const maxWidthPercentage = 100; // A maior barra terá 100%
+
+    let percentage;
+    if (maxValue === 0) {
+        percentage = minWidthPercentage;
+    } else if (count === maxValue) {
+        percentage = maxWidthPercentage;
+    } else {
+        // Aplica uma escala não-linear. A raiz quadrada suaviza a diferença.
+        const scale = Math.sqrt(count) / Math.sqrt(maxValue);
+        percentage = minWidthPercentage + (maxWidthPercentage - minWidthPercentage) * scale;
+    }
+    // --- FIM DA LÓGICA ALTERADA ---
 
     return (
         <div className="flex justify-center items-center w-full mb-1.5">
             <div 
-                className="h-8 bg-gradient-to-r from-acelerar-dark-blue to-acelerar-light-blue/80 rounded-md flex justify-center items-center px-4"
+                className="h-8 bg-gradient-to-r from-acelerar-dark-blue to-acelerar-light-blue/80 rounded-md flex justify-center items-center px-4 overflow-hidden" // Adicionado overflow-hidden
                 style={{ width: `${percentage}%` }}
             >
                 <span className="text-white font-bold text-sm whitespace-nowrap drop-shadow-md">
@@ -22,7 +35,6 @@ function FunnelBar({ name, count, maxValue }) {
 
 // Componente principal que calcula e renderiza o funil
 export default function SdrFunnelChart({ deals }) {
-    // Calcula a contagem de negócios por SDR
     const sdrPerformance = useMemo(() => {
         if (!deals || deals.length === 0) {
             return [];
@@ -36,14 +48,12 @@ export default function SdrFunnelChart({ deals }) {
             return acc;
         }, {});
 
-        // Transforma o mapa em um array e ordena por contagem (maior para menor)
         return Object.entries(sdrCount)
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count);
 
     }, [deals]);
 
-    // Pega o valor máximo para calcular a proporção das barras
     const maxValue = sdrPerformance.length > 0 ? sdrPerformance[0].count : 0;
 
     return (
