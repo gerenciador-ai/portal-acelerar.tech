@@ -90,7 +90,6 @@ export default function ComercialLayout({ children }) {
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    // Filtra os dados uma única vez e os disponibiliza para as páginas filhas
     const filteredDeals = useMemo(() => {
         if (loading || allDeals.length === 0) return [];
         return allDeals.filter(d =>
@@ -102,7 +101,6 @@ export default function ComercialLayout({ children }) {
         );
     }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
 
-    // O valor que será compartilhado com as páginas filhas
     const contextValue = {
         filteredDeals,
         allDeals,
@@ -123,6 +121,8 @@ export default function ComercialLayout({ children }) {
                     <nav className="flex items-center gap-2">
                         <NavLink href="/comercial/resultados">📊 Resultados</NavLink>
                         <NavLink href="/comercial/desempenho">🏆 Desempenho</NavLink>
+                        {/* --- BOTÃO ADICIONADO --- */}
+                        <NavLink href="/comercial/customer-success">❤️ Customer Success</NavLink>
                         <NavLink href="/comercial/inadimplencia">📋 Inadimplência</NavLink>
                     </nav>
                     <div>
@@ -130,7 +130,6 @@ export default function ComercialLayout({ children }) {
                     </div>
                 </header>
                 
-                {/* A ESTRUTURA DE LAYOUT COM SIDEBAR FOI MOVIDA PARA CÁ */}
                 <div className="flex flex-1 overflow-hidden">
                     <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
                         <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} disabled={loading} />
@@ -151,7 +150,6 @@ export default function ComercialLayout({ children }) {
                         <FilterSelect label="SDR" value={selectedSdr} onChange={(e) => setSelectedSdr(e.target.value)} options={sdrs} disabled={loading} />
                     </aside>
                     
-                    {/* AQUI A PÁGINA FILHA (Resultados ou Desempenho) SERÁ RENDERIZADA */}
                     <main className="flex-1 p-6 md:p-8 overflow-y-auto">
                         {children}
                     </main>
