@@ -13,7 +13,7 @@ const FIELDS = {
     ADESAO_R: 111431861, DATA_ATIVACAO: 110778114, DATA_CANCELAMENTO: 111417137
 };
 
-async function fetchAllPages(endpoint ) {
+async function fetchAllPages(endpoint  ) {
     let allData = [];
     let skip = 0;
     const top = 250; // Número de itens por página
@@ -65,6 +65,9 @@ function processDeal(deal, type) {
         contactId: deal.ContactId,
         statusId: deal.StatusId,
         cliente: deal.Title,
+        // CORREÇÃO APLICADA: Adiciona o campo CNPJ, extraindo-o do objeto Contact.
+        // O "?." (optional chaining) garante que o código não quebre se deal.Contact for nulo.
+        CNPJ: deal.Contact?.CNPJ || 'N/A',
         data: new Date(date),
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A',
@@ -86,10 +89,7 @@ export async function GET(request) {
     if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
-        // **NOVA ESTRATÉGIA DE BUSCA**
-        // 1. Busca TODOS os negócios do funil de vendas para ter o histórico completo.
         const endpointVendasFull = `/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact`;
-        // 2. Busca todos os negócios do funil de churn.
         const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact`;
 
         const [vendasFullData, churnData] = await Promise.all([
@@ -100,12 +100,9 @@ export async function GET(request) {
         const allVendasProcessed = vendasFullData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        // **LÓGICA DE CRUZAMENTO REFEITA**
         const mrrMap = new Map();
-        // Percorre TODAS as vendas (ganhas, perdidas, em andamento) para criar o mapa
         for (const venda of allVendasProcessed) {
             if (venda.contactId && venda.mrr > 0) {
-                // Guarda o MRR da venda, se ele existir
                 mrrMap.set(venda.contactId, venda.mrr);
             }
         }
@@ -117,7 +114,6 @@ export async function GET(request) {
             return churn;
         });
 
-        // Agora, filtramos apenas os negócios que nos interessam para o resultado final
         const vendasGanha = allVendasProcessed.filter(v => v.statusId === 2);
         
         const allDeals = [...vendasGanha, ...processedChurn];
