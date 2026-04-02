@@ -5,7 +5,7 @@ import MvpCards from './MvpCards';
 import RankingCharts from './RankingCharts';
 import SdrFunnelChart from './SdrFunnelChart';
 import AuditTable from './AuditTable';
-import StackedAuditChart from './StackedAuditChart'; // 1. IMPORTA o novo componente (Opção 2)
+import StackedAuditChart from './StackedAuditChart';
 
 export default function DesempenhoPage() {
     const { filteredDeals, loading, error, selectedEmpresa, logoEmpresa } = useComercial();
@@ -27,11 +27,13 @@ export default function DesempenhoPage() {
                 <RankingCharts deals={vendas} />
                 <SdrFunnelChart deals={vendas} />
 
-                {/* 2. RENDERIZA A OPÇÃO 1 (Tabela Aprimorada) */}
-                <AuditTable deals={vendas} />
-
-                {/* 3. RENDERIZA A OPÇÃO 2 (Barras Empilhadas) logo abaixo */}
+                {/* --- SEÇÃO FINAL DE AUDITORIA --- */}
+                
+                {/* 1. Gráfico Principal Escolhido (Barras Empilhadas) */}
                 <StackedAuditChart deals={vendas} />
+
+                {/* 2. Tabela de Apoio (Heatmap) mantida para análise detalhada */}
+                <AuditTable deals={vendas} />
             </div>
         </>
     );
