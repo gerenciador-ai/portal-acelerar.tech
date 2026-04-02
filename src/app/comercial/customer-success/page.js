@@ -3,14 +3,21 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useComercial } from '../layout';
 
-// --- Componente de Card para os KPIs (adicionado aqui para simplicidade) ---
-function KpiCard({ title, value, icon, format = (v) => v }) {
+// --- Componente de Card para os KPIs (com a nova legenda) ---
+function KpiCard({ title, value, icon, legend, format = (v) => v }) {
     return (
-        <div className="bg-white/10 p-4 rounded-lg flex items-center gap-4">
-            <div className="text-3xl">{icon}</div>
-            <div>
-                <div className="text-2xl font-bold text-white">{format(value)}</div>
-                <div className="text-xs uppercase text-white/60">{title}</div>
+        <div className="bg-white/10 p-4 rounded-lg flex flex-col justify-between h-full">
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="text-3xl">{icon}</div>
+                    <div>
+                        <div className="text-2xl font-bold text-white">{format(value)}</div>
+                        <div className="text-xs uppercase text-white/60">{title}</div>
+                    </div>
+                </div>
+            </div>
+            <div className="text-right text-[10px] uppercase font-bold text-white/40 mt-2">
+                {legend}
             </div>
         </div>
     );
@@ -18,35 +25,41 @@ function KpiCard({ title, value, icon, format = (v) => v }) {
 
 // --- Componente da Página de Customer Success ---
 export default function CustomerSuccessPage() {
-    const { selectedEmpresa, logoEmpresa } = useComercial();
+    // 1. OBTÉM OS FILTROS DO CONTEXTO GLOBAL
+    const { selectedEmpresa, logoEmpresa, selectedAno, selectedMeses } = useComercial();
 
+    // 2. ESTADOS LOCAIS PARA OS DADOS DE CS
     const [onboardingDeals, setOnboardingDeals] = useState([]);
-    const [ongoingDeals, setOngoingDeals] = useState([]);
+    const [ongoingDeals, setOngoingDeals] = useState([]); // Mantido para o futuro
     const [loadingCS, setLoadingCS] = useState(true);
     const [errorCS, setErrorCS] = useState(null);
     const [activeTab, setActiveTab] = useState('onboarding');
 
+    // 3. LÓGICA DE BUSCA DE DADOS ATUALIZADA
     useEffect(() => {
         const fetchCSData = async () => {
             if (!selectedEmpresa) return;
             setLoadingCS(true);
             setErrorCS(null);
             try {
-                const [onboardingRes, ongoingRes] = await Promise.all([
-                    fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=onboarding`),
-                    fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}&funil=ongoing`)
-                ]);
-
-                if (!onboardingRes.ok || !ongoingRes.ok) {
-                    const errorMsg = await (onboardingRes.ok ? ongoingRes.text() : onboardingRes.text());
-                    throw new Error(`Falha ao buscar dados de CS: ${errorMsg}`);
+                // Chama a nova API especializada para Onboarding
+                const onboardingRes = await fetch(`/api/ploomes/onboarding?empresa=${encodeURIComponent(selectedEmpresa)}`);
+                
+                if (!onboardingRes.ok) {
+                    const errorData = await onboardingRes.json();
+                    throw new Error(errorData.error || 'Falha ao buscar dados de Onboarding.');
                 }
 
                 const onboardingData = await onboardingRes.json();
-                const ongoingData = await ongoingRes.json();
+                // Converte as strings de data para objetos Date
+                const dealsComData = onboardingData.value.map(d => ({
+                    ...d,
+                    dataCriacao: new Date(d.dataCriacao),
+                    dataFinalizacao: d.dataFinalizacao ? new Date(d.dataFinalizacao) : null,
+                }));
+                setOnboardingDeals(dealsComData);
 
-                setOnboardingDeals(onboardingData.value || []);
-                setOngoingDeals(ongoingData.value || []);
+                // (A busca de Ongoing pode ser adicionada aqui no futuro)
 
             } catch (err) {
                 setErrorCS(err.message);
@@ -58,27 +71,46 @@ export default function CustomerSuccessPage() {
         fetchCSData();
     }, [selectedEmpresa]);
 
-    // --- LÓGICA DE CÁLCULO DOS KPIs (ADICIONADA) ---
+    // 4. LÓGICA DE CÁLCULO DOS KPIs (TOTALMENTE REFEITA)
     const { onboardingKpis } = useMemo(() => {
-        if (loadingCS) return { onboardingKpis: {} };
+        if (loadingCS || onboardingDeals.length === 0) return { onboardingKpis: {} };
 
-        // Filtra os deals que ainda estão em andamento (não ganhos/perdidos)
-        const dealsEmAndamento = onboardingDeals.filter(d => d.status === 'Aberto');
-        
-        // Filtra os deals concluídos com sucesso no funil de onboarding
-        const dealsConcluidos = onboardingDeals.filter(d => d.status === 'Venda');
+        // --- KPIs de "Snapshot" (ignoram filtros de data) ---
+        const hoje = new Date();
+        const limiteDias = 120; // Regra: considera apenas onboardings iniciados nos últimos 120 dias
+        const dataLimite = new Date(hoje.setDate(hoje.getDate() - limiteDias));
 
-        const kpis = {
-            clientesEmOnboarding: dealsEmAndamento.length,
-            mrrEmOnboarding: dealsEmAndamento.reduce((sum, d) => sum + d.mrr, 0),
-            tempoMedioOnboarding: dealsConcluidos.length > 0 
-                ? dealsConcluidos.reduce((sum, d) => sum + d.diasNoFunil, 0) / dealsConcluidos.length
-                : 0,
-            onboardingsConcluidos: dealsConcluidos.length,
+        const dealsAtivosRecentes = onboardingDeals.filter(d => 
+            d.status === 'Aberto' && d.dataCriacao > dataLimite
+        );
+
+        const clientesEmOnboarding = dealsAtivosRecentes.length;
+        const mrrEmOnboarding = dealsAtivosRecentes.reduce((sum, d) => sum + d.mrr, 0);
+
+        // --- KPIs de "Período" (respeitam filtros de data) ---
+        const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
+
+        const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
+            d.status === 'Venda' &&
+            d.dataFinalizacao &&
+            d.dataFinalizacao.getFullYear() === selectedAno &&
+            mesesSelecionadosNumeros.includes(d.dataFinalizacao.getMonth())
+        );
+
+        const onboardingsConcluidos = dealsConcluidosNoPeriodo.length;
+        const tempoMedioOnboarding = onboardingsConcluidos > 0
+            ? dealsConcluidosNoPeriodo.reduce((sum, d) => sum + d.diasNoFunil, 0) / onboardingsConcluidos
+            : 0;
+
+        return {
+            onboardingKpis: {
+                clientesEmOnboarding,
+                mrrEmOnboarding,
+                onboardingsConcluidos,
+                tempoMedioOnboarding,
+            }
         };
-
-        return { onboardingKpis: kpis };
-    }, [loadingCS, onboardingDeals]);
+    }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const formatDays = (value) => `${Math.round(value || 0)} dias`;
@@ -107,12 +139,12 @@ export default function CustomerSuccessPage() {
             <div>
                 {activeTab === 'onboarding' && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* --- SEÇÃO DE KPIs SUBSTITUÍDA --- */}
+                        {/* --- SEÇÃO DE KPIs FINALMENTE CORRIGIDA --- */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <KpiCard title="Clientes em Onboarding" value={onboardingKpis.clientesEmOnboarding} icon="⏳" />
-                            <KpiCard title="MRR em Onboarding" value={onboardingKpis.mrrEmOnboarding} icon="💰" format={formatCurrency} />
-                            <KpiCard title="Tempo Médio (Concluídos)" value={onboardingKpis.tempoMedioOnboarding} icon="⏱️" format={formatDays} />
-                            <KpiCard title="Onboardings Concluídos" value={onboardingKpis.onboardingsConcluidos} icon="✅" />
+                            <KpiCard title="Clientes em Onboarding" value={onboardingKpis.clientesEmOnboarding} icon="⏳" legend="Status Atual" />
+                            <KpiCard title="MRR em Onboarding" value={onboardingKpis.mrrEmOnboarding} icon="💰" format={formatCurrency} legend="Status Atual" />
+                            <KpiCard title="Onboardings Concluídos" value={onboardingKpis.onboardingsConcluidos} icon="✅" legend="Período Selecionado" />
+                            <KpiCard title="Tempo Médio (Concluídos)" value={onboardingKpis.tempoMedioOnboarding} icon="⏱️" format={formatDays} legend="Período Selecionado" />
                         </div>
                         {/* Placeholders restantes */}
                         <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Gráfico: Funil de Etapas do Onboarding)</p></div>
@@ -123,14 +155,6 @@ export default function CustomerSuccessPage() {
                 {activeTab === 'ongoing' && (
                     <div className="space-y-6 animate-fade-in">
                         {/* ... (placeholders de ongoing permanecem) ... */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Clientes Ativos)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR Ativo)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Health Score Médio)</p></div>
-                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR em Risco)</p></div>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Gráfico: Saúde da Carteira)</p></div>
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Atividades e Engajamento)</p></div>
                     </div>
                 )}
             </div>
