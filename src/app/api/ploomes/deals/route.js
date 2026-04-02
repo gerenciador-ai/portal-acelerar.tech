@@ -65,9 +65,8 @@ function processDeal(deal, type) {
         contactId: deal.ContactId,
         statusId: deal.StatusId,
         cliente: deal.Title,
-        // CORREÇÃO APLICADA: Adiciona o campo CNPJ, extraindo-o do objeto Contact.
-        // O "?." (optional chaining) garante que o código não quebre se deal.Contact for nulo.
-        CNPJ: deal.Contact.CNPJ || 'N/A',
+        // CORREÇÃO APLICADA: Usa a lógica exata do código antigo que você forneceu.
+        cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date),
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A',
@@ -89,8 +88,9 @@ export async function GET(request) {
     if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
-        const endpointVendasFull = `/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact`;
-        const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact`;
+        // CORREÇÃO DE CONSISTÊNCIA: Garante que o $expand também peça o CPF.
+        const endpointVendasFull = `/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`;
+        const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`;
 
         const [vendasFullData, churnData] = await Promise.all([
             fetchAllPages(endpointVendasFull),
