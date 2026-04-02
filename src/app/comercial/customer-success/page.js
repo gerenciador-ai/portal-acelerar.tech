@@ -24,7 +24,6 @@ function KpiCard({ title, value, icon, legend, format = (v) => v }) {
 }
 
 export default function CustomerSuccessPage() {
-    // 1. OBTÉM OS FILTROS E SETTERS DO CONTEXTO GLOBAL
     const { 
         selectedEmpresa, logoEmpresa, 
         selectedAno, setSelectedAno, setAnos,
@@ -37,7 +36,6 @@ export default function CustomerSuccessPage() {
     const [errorCS, setErrorCS] = useState(null);
     const [activeTab, setActiveTab] = useState('onboarding');
 
-    // Lógica de busca de dados (sem alterações)
     useEffect(() => {
         const fetchCSData = async () => {
             if (!selectedEmpresa) return;
@@ -65,10 +63,8 @@ export default function CustomerSuccessPage() {
         fetchCSData();
     }, [selectedEmpresa]);
 
-    // 2. CORREÇÃO: ADICIONA A LÓGICA PARA POPULAR OS FILTROS DE DATA
     useEffect(() => {
         if (onboardingDeals.length === 0) return;
-        // Usa as datas de criação e finalização para ter uma lista completa de anos
         const allDates = onboardingDeals.flatMap(d => [d.dataCriacao, d.dataFinalizacao]).filter(Boolean);
         const anosUnicos = [...new Set(allDates.map(d => d.getFullYear()))].sort((a, b) => b - a);
         setAnos(anosUnicos);
@@ -85,15 +81,14 @@ export default function CustomerSuccessPage() {
         const mesesDoAno = [...new Set(allDatesInYear.map(d => d.getMonth()))];
         const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')).sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
         setMeses(mesesNomes);
-        // Seleciona todos os meses por padrão ao carregar
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-
-    // Lógica de cálculo dos KPIs (sem alterações, agora receberá os filtros corretos)
+    // Lógica de cálculo dos KPIs (com a correção no tempo médio)
     const { onboardingKpis } = useMemo(() => {
         if (loadingCS || onboardingDeals.length === 0) return { onboardingKpis: {} };
 
+        // --- KPIs de "Snapshot" ---
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
@@ -105,6 +100,7 @@ export default function CustomerSuccessPage() {
         const clientesEmOnboarding = dealsAtivosRecentes.length;
         const mrrEmOnboarding = dealsAtivosRecentes.reduce((sum, d) => sum + d.mrr, 0);
 
+        // --- KPIs de "Período" ---
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -115,8 +111,13 @@ export default function CustomerSuccessPage() {
         );
 
         const onboardingsConcluidos = dealsConcluidosNoPeriodo.length;
+
+        // --- AQUI ESTÁ A CORREÇÃO ---
+        // Soma os valores do campo 'diasNoFunil' dos negócios concluídos.
+        const somaDosDias = dealsConcluidosNoPeriodo.reduce((sum, d) => sum + (d.diasNoFunil || 0), 0);
+        
         const tempoMedioOnboarding = onboardingsConcluidos > 0
-            ? dealsConcluidosNoPeriodo.reduce((sum, d) => sum + d.diasNoFunil, 0) / onboardingsConcluidos
+            ? somaDosDias / onboardingsConcluidos
             : 0;
 
         return {
@@ -165,7 +166,6 @@ export default function CustomerSuccessPage() {
                     </div>
                 )}
 
-                {/* 3. CORREÇÃO: PLACEHOLDERS DE ONGOING REINSERIDOS */}
                 {activeTab === 'ongoing' && (
                     <div className="space-y-6 animate-fade-in">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
