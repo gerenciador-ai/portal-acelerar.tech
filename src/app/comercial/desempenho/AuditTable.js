@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from 'react';
-import { FaQuestionCircle } from 'react-icons/fa'; // Importa um ícone de interrogação
+// A linha de importação do 'react-icons/fa' foi REMOVIDA.
 
 // Componente principal da nova tabela de auditoria
 export default function AuditTable({ dealsGanhos, dealsGerados }) {
@@ -19,7 +19,6 @@ export default function AuditTable({ dealsGanhos, dealsGerados }) {
             const vendedorSet = new Set();
 
             deals.forEach(deal => {
-                // A regra de ouro: só processa se tiver SDR e Vendedor definidos
                 if (deal.sdr && deal.vendedor && deal.sdr !== 'N/A' && deal.vendedor !== 'N/A') {
                     sdrSet.add(deal.sdr);
                     vendedorSet.add(deal.vendedor);
@@ -31,7 +30,6 @@ export default function AuditTable({ dealsGanhos, dealsGerados }) {
                     vendedorTotals[deal.vendedor] = (vendedorTotals[deal.vendedor] || 0) + 1;
                     grandTotal++;
                 } else if (!filterByVendedor && deal.sdr && deal.sdr !== 'N/A') {
-                    // Adiciona SDRs à lista mesmo que não tenham handoff, para garantir que todos apareçam
                     sdrSet.add(deal.sdr);
                 }
             });
@@ -41,7 +39,6 @@ export default function AuditTable({ dealsGanhos, dealsGerados }) {
         const ganhos = processDeals(dealsGanhos, true);
         const gerados = processDeals(dealsGerados, false);
 
-        // Combina as listas de SDRs e Vendedores de ambos os datasets para garantir que ninguém falte
         const combinedSdrSet = new Set([...gerados.sdrSet, ...ganhos.sdrSet]);
         const combinedVendedorSet = new Set([...gerados.vendedorSet, ...ganhos.vendedorSet]);
 
@@ -74,6 +71,7 @@ export default function AuditTable({ dealsGanhos, dealsGerados }) {
         <div className="bg-white/10 p-4 rounded-lg overflow-x-auto">
             <h3 className="text-sm font-bold text-acelerar-gold-light uppercase tracking-wider mb-4 flex items-center gap-2">
                 📋 Auditoria de Negócios (Geração vs. Conversão)
+                {/* AQUI ESTÁ A CORREÇÃO: Usando emoji e sem o componente de ícone */}
                 <span title="Nossa 'Matriz de Geração' só contabiliza os negócios que de fato representam um handoff (uma passagem de bastão) do SDR para um Vendedor específico." className="cursor-help">
                     ❓
                 </span>
