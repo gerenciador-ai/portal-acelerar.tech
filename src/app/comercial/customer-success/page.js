@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useComercial } from '../layout';
 import OnboardingFunnelChart from './OnboardingFunnelChart';
 
-// --- Componente KpiCard (sem alterações) ---
+// ... (Componente KpiCard - sem alterações)
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg flex flex-col justify-between h-full">
@@ -23,6 +23,7 @@ function KpiCard({ title, value, icon, legend, format = (v) => v }) {
         </div>
     );
 }
+
 
 export default function CustomerSuccessPage() {
     const { 
@@ -64,6 +65,7 @@ export default function CustomerSuccessPage() {
         fetchCSData();
     }, [selectedEmpresa]);
 
+    // ... (useEffect de filtros - sem alterações)
     useEffect(() => {
         if (onboardingDeals.length === 0) return;
         const allDates = onboardingDeals.flatMap(d => [d.dataCriacao, d.dataFinalizacao]).filter(Boolean);
@@ -85,13 +87,12 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    // --- LÓGICA DE CÁLCULO CENTRALIZADA ---
+
     const { onboardingKpis, dealsAtivosRecentes } = useMemo(() => {
         if (loadingCS || onboardingDeals.length === 0) {
             return { onboardingKpis: {}, dealsAtivosRecentes: [] };
         }
 
-        // 1. CALCULA A LISTA DE CLIENTES ATIVOS EM UM ÚNICO LUGAR
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
@@ -100,11 +101,13 @@ export default function CustomerSuccessPage() {
             d.status === 'Aberto' && d.dataCriacao > dataLimite
         );
 
-        // --- KPIs de "Snapshot" (usam a lista de ativos) ---
+        // *** LOG ADICIONADO AQUI ***
+        // Vamos imprimir a lista de deals que está sendo passada para o gráfico.
+        console.log('[PAGE LOG] Lista de "dealsAtivosRecentes" que será passada para o gráfico:', activeDeals);
+
         const clientesEmOnboarding = activeDeals.length;
         const mrrEmOnboarding = activeDeals.reduce((sum, d) => sum + d.mrr, 0);
 
-        // --- KPIs de "Período" (usam a lista completa e os filtros) ---
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -115,14 +118,9 @@ export default function CustomerSuccessPage() {
         );
 
         const onboardingsConcluidos = dealsConcluidosNoPeriodo.length;
-        
         const somaDosDias = dealsConcluidosNoPeriodo.reduce((sum, d) => sum + (d.diasNoFunil || 0), 0);
-        
-        const tempoMedioOnboarding = onboardingsConcluidos > 0
-            ? somaDosDias / onboardingsConcluidos
-            : 0;
+        const tempoMedioOnboarding = onboardingsConcluidos > 0 ? somaDosDias / onboardingsConcluidos : 0;
 
-        // 2. RETORNA TANTO OS KPIs QUANTO A LISTA DE ATIVOS
         return {
             onboardingKpis: {
                 clientesEmOnboarding, mrrEmOnboarding,
@@ -140,6 +138,7 @@ export default function CustomerSuccessPage() {
 
     return (
         <>
+            {/* ... (cabeçalho e abas - sem alterações) ... */}
             <div className="flex items-center gap-4 mb-6">
                 <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={180} height={60} style={{ objectFit: 'contain' }} />
                 <h1 className="text-3xl font-bold text-white">Customer Success</h1>
@@ -166,7 +165,6 @@ export default function CustomerSuccessPage() {
                             <KpiCard title="Tempo Médio (Concluídos)" value={onboardingKpis.tempoMedioOnboarding} icon="⏱️" format={formatDays} legend="Período Selecionado" />
                         </div>
                         
-                        {/* 3. PASSA A LISTA JÁ FILTRADA PARA O GRÁFICO */}
                         <OnboardingFunnelChart activeDeals={dealsAtivosRecentes} />
 
                         <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Clientes em Onboarding)</p></div>
