@@ -1,13 +1,13 @@
 "use client";
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { useState, useEffect, useMemo, createContext, useContext } from 'react';
+import { useState, createContext, useContext } from 'react';
 
-// --- Contexto para compartilhar dados e filtros ---
+// --- Contexto para compartilhar APENAS filtros e estados globais ---
 const ComercialContext = createContext(null);
 export const useComercial = () => useContext(ComercialContext);
 
-// --- Componentes do Layout ---
+// --- Componentes do Layout (sem alterações) ---
 function NavLink({ href, children }) {
     const pathname = usePathname();
     const isActive = pathname.startsWith(href);
@@ -31,83 +31,43 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
 
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-// --- O Layout Principal do Módulo Comercial ---
+// --- O Layout Principal do Módulo Comercial (Refatorado) ---
 export default function ComercialLayout({ children }) {
     const router = useRouter();
     
-    // Toda a lógica de estado e busca de dados foi movida para cá
-    const [allDeals, setAllDeals] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // --- ESTADOS DE DADOS REMOVIDOS ---
+    // A lógica de allDeals, loading e error foi movida para as páginas filhas.
+
+    // --- ESTADOS DE FILTRO MANTIDOS ---
     const [selectedEmpresa, setSelectedEmpresa] = useState('VMC Tech');
-    const [anos, setAnos] = useState([]);
+    const [anos, setAnos] = useState([new Date().getFullYear()]);
     const [selectedAno, setSelectedAno] = useState(new Date().getFullYear());
     const [meses, setMeses] = useState([]);
     const [selectedMeses, setSelectedMeses] = useState([]);
-    const [produtos, setProdutos] = useState([]);
+    const [produtos, setProdutos] = useState(['Todos']);
     const [selectedProduto, setSelectedProduto] = useState('Todos');
-    const [vendedores, setVendedores] = useState([]);
+    const [vendedores, setVendedores] = useState(['Todos']);
     const [selectedVendedor, setSelectedVendedor] = useState('Todos');
-    const [sdrs, setSdrs] = useState([]);
+    const [sdrs, setSdrs] = useState(['Todos']);
     const [selectedSdr, setSelectedSdr] = useState('Todos');
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true); setError(null);
-                const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}`);
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Falha ao buscar dados');
-                const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
-                setAllDeals(dealsComData);
-            } catch (err) {
-                setError(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [selectedEmpresa]);
-
-    useEffect(() => {
-        if (allDeals.length === 0) return;
-        const anosUnicos = [...new Set(allDeals.map(d => d.data.getFullYear()))].sort((a, b) => b - a);
-        setAnos(anosUnicos);
-        if (!anosUnicos.includes(selectedAno)) setSelectedAno(anosUnicos[0] || new Date().getFullYear());
-        const getUniqueAndSorted = (key) => ['Todos', ...[...new Set(allDeals.map(d => d[key]).filter(Boolean).filter(v => v !== 'N/A'))].sort()];
-        setProdutos(getUniqueAndSorted('produto'));
-        setVendedores(getUniqueAndSorted('vendedor'));
-        setSdrs(getUniqueAndSorted('sdr'));
-    }, [allDeals]);
-
-    useEffect(() => {
-        if (allDeals.length === 0 || !selectedAno) return;
-        const mesesDoAno = [...new Set(allDeals.filter(d => d.data.getFullYear() === selectedAno).map(d => d.data.getMonth()))];
-        const mesesNomes = mesesDoAno.map(m => new Date(0, m).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')).sort((a, b) => MESES_ORDEM.indexOf(a) - MESES_ORDEM.indexOf(b));
-        setMeses(mesesNomes);
-        setSelectedMeses(mesesNomes);
-    }, [selectedAno, allDeals]);
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    const filteredDeals = useMemo(() => {
-        if (loading || allDeals.length === 0) return [];
-        return allDeals.filter(d =>
-            d.data.getFullYear() === selectedAno &&
-            selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
-            (selectedProduto === 'Todos' || d.produto === selectedProduto) &&
-            (selectedVendedor === 'Todos' || d.vendedor === selectedVendedor) &&
-            (selectedSdr === 'Todos' || d.sdr === selectedSdr)
-        );
-    }, [loading, allDeals, selectedAno, selectedMeses, selectedProduto, selectedVendedor, selectedSdr]);
-
+    // O valor do contexto agora compartilha os filtros e os setters para que as páginas filhas possam atualizá-los.
     const contextValue = {
-        filteredDeals,
-        allDeals,
-        loading,
-        error,
-        selectedEmpresa,
-        logoEmpresa: selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png'
+        selectedEmpresa, setSelectedEmpresa,
+        anos, setAnos,
+        selectedAno, setSelectedAno,
+        meses, setMeses,
+        selectedMeses, setSelectedMeses, handleMesChange,
+        produtos, setProdutos,
+        selectedProduto, setSelectedProduto,
+        vendedores, setVendedores,
+        selectedVendedor, setSelectedVendedor,
+        sdrs, setSdrs,
+        selectedSdr, setSelectedSdr,
+        logoEmpresa: selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png',
+        MESES_ORDEM
     };
 
     return (
@@ -121,7 +81,6 @@ export default function ComercialLayout({ children }) {
                     <nav className="flex items-center gap-2">
                         <NavLink href="/comercial/resultados">📊 Resultados</NavLink>
                         <NavLink href="/comercial/desempenho">🏆 Desempenho</NavLink>
-                        {/* --- BOTÃO ADICIONADO --- */}
                         <NavLink href="/comercial/customer-success">❤️ Customer Success</NavLink>
                         <NavLink href="/comercial/inadimplencia">📋 Inadimplência</NavLink>
                     </nav>
@@ -132,8 +91,8 @@ export default function ComercialLayout({ children }) {
                 
                 <div className="flex flex-1 overflow-hidden">
                     <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
-                        <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} disabled={loading} />
-                        <FilterSelect label="Ano" value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} options={anos} disabled={loading || anos.length === 0} />
+                        <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} />
+                        <FilterSelect label="Ano" value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} options={anos} disabled={anos.length <= 1} />
                         <div>
                             <label className="text-xs text-white/70 block mb-1 font-bold uppercase">Meses</label>
                             <div className="bg-acelerar-dark-blue p-2 rounded-md border border-white/20 max-h-48 overflow-y-auto">
@@ -145,9 +104,9 @@ export default function ComercialLayout({ children }) {
                                 ))}
                             </div>
                         </div>
-                        <FilterSelect label="Produto" value={selectedProduto} onChange={(e) => setSelectedProduto(e.target.value)} options={produtos} disabled={loading} />
-                        <FilterSelect label="Vendedor" value={selectedVendedor} onChange={(e) => setSelectedVendedor(e.target.value)} options={vendedores} disabled={loading} />
-                        <FilterSelect label="SDR" value={selectedSdr} onChange={(e) => setSelectedSdr(e.target.value)} options={sdrs} disabled={loading} />
+                        <FilterSelect label="Produto" value={selectedProduto} onChange={(e) => setSelectedProduto(e.target.value)} options={produtos} />
+                        <FilterSelect label="Vendedor" value={selectedVendedor} onChange={(e) => setSelectedVendedor(e.target.value)} options={vendedores} />
+                        <FilterSelect label="SDR" value={selectedSdr} onChange={(e) => setSelectedSdr(e.target.value)} options={sdrs} />
                     </aside>
                     
                     <main className="flex-1 p-6 md:p-8 overflow-y-auto">
