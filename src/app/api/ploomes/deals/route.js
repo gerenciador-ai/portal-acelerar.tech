@@ -13,7 +13,7 @@ const FIELDS = {
     ADESAO_R: 111431861, DATA_ATIVACAO: 110778114, DATA_CANCELAMENTO: 111417137
 };
 
-async function fetchAllPages(endpoint  ) {
+async function fetchAllPages(endpoint   ) {
     let allData = [];
     let skip = 0;
     const top = 250; // Número de itens por página
@@ -65,7 +65,6 @@ function processDeal(deal, type) {
         contactId: deal.ContactId,
         statusId: deal.StatusId,
         cliente: deal.Title,
-        // CORREÇÃO APLICADA: Usa a lógica exata do código antigo que você forneceu.
         cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date),
         vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
@@ -88,7 +87,6 @@ export async function GET(request) {
     if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
-        // CORREÇÃO DE CONSISTÊNCIA: Garante que o $expand também peça o CPF.
         const endpointVendasFull = `/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`;
         const endpointChurn = `/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`;
 
@@ -100,16 +98,32 @@ export async function GET(request) {
         const allVendasProcessed = vendasFullData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        const mrrMap = new Map();
+        // **CORREÇÃO APLICADA: Criação de mapas para MRR, Vendedor e SDR**
+        const dataMap = new Map();
         for (const venda of allVendasProcessed) {
-            if (venda.contactId && venda.mrr > 0) {
-                mrrMap.set(venda.contactId, venda.mrr);
+            // Considera apenas vendas ganhas (statusId 2) para pegar os dados corretos
+            if (venda.contactId && venda.statusId === 2) {
+                // Armazena a venda mais recente para cada cliente, caso haja múltiplas
+                if (!dataMap.has(venda.contactId) || new Date(venda.data) > new Date(dataMap.get(venda.contactId).data)) {
+                    dataMap.set(venda.contactId, {
+                        mrr: venda.mrr,
+                        vendedor: venda.vendedor,
+                        sdr: venda.sdr
+                    });
+                }
             }
         }
 
+        // **CORREÇÃO APLICADA: Enriquecimento dos dados de Churn**
         processedChurn = processedChurn.map(churn => {
-            if (churn.contactId && mrrMap.has(churn.contactId)) {
-                return { ...churn, mrr: mrrMap.get(churn.contactId) };
+            if (churn.contactId && dataMap.has(churn.contactId)) {
+                const originalData = dataMap.get(churn.contactId);
+                return { 
+                    ...churn, 
+                    mrr: originalData.mrr, // Sobrescreve o MRR com o da venda original
+                    vendedor: originalData.vendedor, // Sobrescreve o Vendedor com o da venda original
+                    sdr: originalData.sdr // Sobrescreve o SDR com o da venda original
+                };
             }
             return churn;
         });
