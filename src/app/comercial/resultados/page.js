@@ -3,7 +3,9 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
-// Componentes KpiCard e FilterSelect (sem alterações)
+const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
+const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
+
 function KpiCard({ title, value, subValue, color = 'text-acelerar-light-blue' }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg text-center flex flex-col justify-between">
@@ -26,9 +28,6 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
         </div>
     );
 }
-
-const GraficosResultados = dynamic(() => import('./GraficosResultados'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando gráficos...</div> });
-const TabelasResumo = dynamic(() => import('./TabelasResumo'), { ssr: false, loading: () => <div className="text-center p-10 text-white/50">Carregando tabelas...</div> });
 
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -53,11 +52,8 @@ export default function ResultadosPage() {
             try {
                 setLoading(true); setError(null);
                 const response = await fetch(`/api/ploomes/deals?empresa=${encodeURIComponent(selectedEmpresa)}`);
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
-                }
                 const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Falha ao buscar dados');
                 const dealsComData = data.value.map(d => ({ ...d, data: new Date(d.data) }));
                 setAllDeals(dealsComData);
             } catch (err) {
@@ -93,7 +89,7 @@ export default function ResultadosPage() {
     const { kpis, chartData, tableData } = useMemo(() => {
         if (loading || allDeals.length === 0) return { kpis: {}, chartData: null, tableData: null };
         
-        const dealsFiltrados = allDeals.filter(d =>
+        const deals = allDeals.filter(d =>
             d.data.getFullYear() === selectedAno &&
             selectedMeses.includes(new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')) &&
             (selectedProduto === 'Todos' || d.produto === selectedProduto) &&
@@ -101,18 +97,8 @@ export default function ResultadosPage() {
             (selectedSdr === 'Todos' || d.sdr === selectedSdr)
         );
 
-        const vendas = dealsFiltrados.filter(d => d.status === 'Ganho');
-        const canceladosBrutos = dealsFiltrados.filter(d => d.status === 'Perdido (Churn)');
-
-        const cancelados = canceladosBrutos.map(churnDeal => {
-            const vendaOriginal = allDeals.find(d => d.status === 'Ganho' && d.contactId === churnDeal.contactId);
-            return {
-                ...churnDeal,
-                vendedorOriginal: vendaOriginal ? vendaOriginal.vendedor : 'N/A',
-                sdrOriginal: vendaOriginal ? vendaOriginal.sdr : 'N/A',
-            };
-        });
-
+        const vendas = deals.filter(d => d.status === 'Venda');
+        const cancelados = deals.filter(d => d.status === 'Churn');
         const mrrConquistado = vendas.reduce((sum, d) => sum + d.mrr, 0);
         const mrrPerdido = cancelados.reduce((sum, d) => sum + d.mrr, 0);
         const kpisCalculados = {
@@ -121,16 +107,16 @@ export default function ResultadosPage() {
             ticketMedio: vendas.length > 0 ? mrrConquistado / vendas.length : 0,
             adesaoTotal: vendas.reduce((sum, d) => sum + (d.adesao || 0), 0),
             clientesFechados: vendas.length, clientesCancelados: cancelados.length,
-            carteiraAtiva: allDeals.filter(d => d.status === 'Ganho').length - allDeals.filter(d => d.status === 'Perdido (Churn)').length,
+            carteiraAtiva: allDeals.filter(d => d.status === 'Venda').length - allDeals.filter(d => d.status === 'Churn').length,
             percentualMrrPerdido: mrrConquistado > 0 ? (mrrPerdido / mrrConquistado) * 100 : 0,
             percentualClientesCancelados: vendas.length > 0 ? (cancelados.length / vendas.length) * 100 : 0,
         };
 
         const labels = MESES_ORDEM.filter(mes => selectedMeses.includes(mes));
         const monthlyData = labels.map(mes => {
-            const dealsDoMes = dealsFiltrados.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
-            const vendasDoMes = dealsDoMes.filter(d => d.status === 'Ganho');
-            const churnDoMes = dealsDoMes.filter(d => d.status === 'Perdido (Churn)');
+            const dealsDoMes = deals.filter(d => new Date(0, d.data.getMonth()).toLocaleString('pt-BR', { month: 'short' }).replace('.', '') === mes);
+            const vendasDoMes = dealsDoMes.filter(d => d.status === 'Venda');
+            const churnDoMes = dealsDoMes.filter(d => d.status === 'Churn');
             return {
                 mes,
                 mrr: vendasDoMes.reduce((sum, d) => sum + (d.mrr || 0), 0),
@@ -209,6 +195,7 @@ export default function ResultadosPage() {
                             <GraficosResultados chartData={chartData} />
                         </div>
 
+                        {/* A FORMA CORRETA E SEGURA DE PASSAR OS DADOS */}
                         <TabelasResumo tableData={tableData} />
                     </>
                 )}
