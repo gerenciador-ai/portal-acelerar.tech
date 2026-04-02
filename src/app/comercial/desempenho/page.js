@@ -29,7 +29,7 @@ export default function DesempenhoPage() {
                 <RankingCharts deals={vendas} />
 
                 {/* SdrFunnelChart recebe TODOS os deals para contar a originação de negócios */}
-                <SdrFunnelChart deals={filteredDeals} />
+                <SdrFunnelChart deals={vendas} />
 
                 {/* Seção 4: Tabela de Auditoria (ainda como placeholder) */}
                 <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center">
