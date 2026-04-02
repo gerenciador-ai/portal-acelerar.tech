@@ -2,15 +2,12 @@
 "use client";
 import { useMemo } from 'react';
 
-// --- Componente para uma única barra do funil ---
+// --- Componente FunnelBar (sem alterações) ---
 function FunnelBar({ name, value, maxValue }) {
-    // Define uma largura mínima de 25% para garantir que o texto seja sempre legível,
-    // e uma largura máxima de 100%. A escala real acontece entre esses dois pontos.
     const minWidth = 25;
     const maxWidth = 100;
     const scale = maxWidth - minWidth;
     const percentage = minWidth + (maxValue > 0 ? (value / maxValue) * scale : 0);
-
     return (
         <div className="relative w-full h-8 bg-white/5 rounded-md mb-2 flex items-center justify-center">
             <div 
@@ -24,34 +21,22 @@ function FunnelBar({ name, value, maxValue }) {
     );
 }
 
-// --- Componente Principal do Gráfico de Funil ---
-export default function OnboardingFunnelChart({ deals }) {
+// --- Componente Principal do Gráfico (AGORA SIMPLIFICADO) ---
+// Ele agora recebe 'activeDeals' já filtrados.
+export default function OnboardingFunnelChart({ activeDeals }) {
     
-    // 1. Define a ordem correta e os nomes das etapas do funil.
     const STAGES_ORDER = [
-        '🏁 Kick-off',
-        '⚙️ Setup',
-        '🎓 Treinamento',
-        '🚀 Go-Live',
-        '📈 Acompanhamento Inicial'
+        '🏁 Kick-off', '⚙️ Setup', '🎓 Treinamento',
+        '🚀 Go-Live', '📈 Acompanhamento Inicial'
     ];
 
-    // 2. Calcula a contagem de clientes em cada etapa.
+    // A LÓGICA DE FILTRAGEM FOI REMOVIDA DAQUI.
+    // O componente agora confia nos dados que recebe.
     const funnelData = useMemo(() => {
-        if (!deals || deals.length === 0) {
+        if (!activeDeals || activeDeals.length === 0) {
             return [];
         }
 
-        // Filtra apenas os clientes que estão ativamente em onboarding.
-        const hoje = new Date();
-        const limiteDias = 120;
-        const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
-        
-        const activeDeals = deals.filter(d => 
-            d.status === 'Aberto' && d.dataCriacao > dataLimite
-        );
-
-        // Conta quantos deals existem em cada etapa definida.
         const stageCounts = activeDeals.reduce((acc, deal) => {
             const stageName = deal.etapa;
             if (stageName) {
@@ -60,15 +45,13 @@ export default function OnboardingFunnelChart({ deals }) {
             return acc;
         }, {});
 
-        // Mapeia os resultados para o formato do gráfico, garantindo a ordem correta.
         return STAGES_ORDER.map(stageName => ({
             name: stageName,
             value: stageCounts[stageName] || 0
         }));
 
-    }, [deals]);
+    }, [activeDeals]);
 
-    // Encontra o valor máximo para a escala do gráfico.
     const maxValue = useMemo(() => 
         funnelData.length > 0 ? Math.max(...funnelData.map(d => d.value)) : 0
     , [funnelData]);
