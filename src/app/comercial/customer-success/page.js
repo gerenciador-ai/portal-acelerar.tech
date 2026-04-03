@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useComercial } from '../layout';
 import OnboardingFunnelChart from './OnboardingFunnelChart';
 
-// ... (Componente KpiCard - sem alterações)
+// --- Componente KpiCard (sem alterações) ---
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
     return (
         <div className="bg-white/10 p-4 rounded-lg flex flex-col justify-between h-full">
@@ -23,7 +23,6 @@ function KpiCard({ title, value, icon, legend, format = (v) => v }) {
         </div>
     );
 }
-
 
 export default function CustomerSuccessPage() {
     const { 
@@ -65,7 +64,6 @@ export default function CustomerSuccessPage() {
         fetchCSData();
     }, [selectedEmpresa]);
 
-    // ... (useEffect de filtros - sem alterações)
     useEffect(() => {
         if (onboardingDeals.length === 0) return;
         const allDates = onboardingDeals.flatMap(d => [d.dataCriacao, d.dataFinalizacao]).filter(Boolean);
@@ -87,12 +85,13 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-
+    // --- LÓGICA DE CÁLCULO CORRIGIDA ---
     const { onboardingKpis, dealsAtivosRecentes } = useMemo(() => {
         if (loadingCS || onboardingDeals.length === 0) {
             return { onboardingKpis: {}, dealsAtivosRecentes: [] };
         }
 
+        // 1. CALCULA OS KPIs DE "STATUS ATUAL" USANDO A LISTA COMPLETA, IGNORANDO FILTROS DE DATA
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
@@ -100,14 +99,10 @@ export default function CustomerSuccessPage() {
         const activeDeals = onboardingDeals.filter(d => 
             d.status === 'Aberto' && d.dataCriacao > dataLimite
         );
-
-        // *** LOG ADICIONADO AQUI ***
-        // Vamos imprimir a lista de deals que está sendo passada para o gráfico.
-        console.log('[PAGE LOG] Lista de "dealsAtivosRecentes" que será passada para o gráfico:', activeDeals);
-
         const clientesEmOnboarding = activeDeals.length;
         const mrrEmOnboarding = activeDeals.reduce((sum, d) => sum + d.mrr, 0);
 
+        // 2. CALCULA OS KPIs DE "PERÍODO" USANDO A LISTA COMPLETA E OS FILTROS DE DATA
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -116,7 +111,6 @@ export default function CustomerSuccessPage() {
             d.dataFinalizacao.getFullYear() === selectedAno &&
             mesesSelecionadosNumeros.includes(d.dataFinalizacao.getMonth())
         );
-
         const onboardingsConcluidos = dealsConcluidosNoPeriodo.length;
         const somaDosDias = dealsConcluidosNoPeriodo.reduce((sum, d) => sum + (d.diasNoFunil || 0), 0);
         const tempoMedioOnboarding = onboardingsConcluidos > 0 ? somaDosDias / onboardingsConcluidos : 0;
@@ -128,7 +122,7 @@ export default function CustomerSuccessPage() {
             },
             dealsAtivosRecentes: activeDeals 
         };
-    }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]);
+    }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]); // Dependências corretas
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const formatDays = (value) => `${Math.round(value || 0)} dias`;
@@ -138,7 +132,6 @@ export default function CustomerSuccessPage() {
 
     return (
         <>
-            {/* ... (cabeçalho e abas - sem alterações) ... */}
             <div className="flex items-center gap-4 mb-6">
                 <Image src={logoEmpresa} alt={`Logo ${selectedEmpresa}`} width={180} height={60} style={{ objectFit: 'contain' }} />
                 <h1 className="text-3xl font-bold text-white">Customer Success</h1>
@@ -173,7 +166,14 @@ export default function CustomerSuccessPage() {
 
                 {activeTab === 'ongoing' && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* ... (placeholders de ongoing) ... */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Clientes Ativos)</p></div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR Ativo)</p></div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: Health Score Médio)</p></div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[100px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(KPI: MRR em Risco)</p></div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[250px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Gráfico: Saúde da Carteira)</p></div>
+                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Atividades e Engajamento)</p></div>
                     </div>
                 )}
             </div>
