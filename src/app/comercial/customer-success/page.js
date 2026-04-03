@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useComercial } from '../layout';
 import OnboardingFunnelChart from './OnboardingFunnelChart';
+import OnboardingClientsTable from './OnboardingClientsTable'; // 1. IMPORTA o novo componente da tabela
 
 // --- Componente KpiCard (sem alterações) ---
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
@@ -85,13 +86,11 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
-    // --- LÓGICA DE CÁLCULO CORRIGIDA ---
     const { onboardingKpis, dealsAtivosRecentes } = useMemo(() => {
         if (loadingCS || onboardingDeals.length === 0) {
             return { onboardingKpis: {}, dealsAtivosRecentes: [] };
         }
 
-        // 1. CALCULA OS KPIs DE "STATUS ATUAL" USANDO A LISTA COMPLETA, IGNORANDO FILTROS DE DATA
         const hoje = new Date();
         const limiteDias = 120;
         const dataLimite = new Date(new Date().setDate(hoje.getDate() - limiteDias));
@@ -102,7 +101,6 @@ export default function CustomerSuccessPage() {
         const clientesEmOnboarding = activeDeals.length;
         const mrrEmOnboarding = activeDeals.reduce((sum, d) => sum + d.mrr, 0);
 
-        // 2. CALCULA OS KPIs DE "PERÍODO" USANDO A LISTA COMPLETA E OS FILTROS DE DATA
         const mesesSelecionadosNumeros = selectedMeses.map(mesNome => new Date(Date.parse(mesNome +" 1, 2000")).getMonth());
 
         const dealsConcluidosNoPeriodo = onboardingDeals.filter(d =>
@@ -122,7 +120,7 @@ export default function CustomerSuccessPage() {
             },
             dealsAtivosRecentes: activeDeals 
         };
-    }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]); // Dependências corretas
+    }, [loadingCS, onboardingDeals, selectedAno, selectedMeses]);
 
     const formatCurrency = (value) => `R$ ${Math.round(value || 0).toLocaleString('pt-BR')}`;
     const formatDays = (value) => `${Math.round(value || 0)} dias`;
@@ -160,7 +158,8 @@ export default function CustomerSuccessPage() {
                         
                         <OnboardingFunnelChart activeDeals={dealsAtivosRecentes} />
 
-                        <div className="bg-white/5 p-4 rounded-lg border border-dashed border-white/20 min-h-[300px] flex flex-col justify-center items-center"><p className="text-sm text-white/50">(Tabela: Clientes em Onboarding)</p></div>
+                        {/* 2. SUBSTITUI o placeholder final pela tabela */}
+                        <OnboardingClientsTable activeDeals={dealsAtivosRecentes} />
                     </div>
                 )}
 
