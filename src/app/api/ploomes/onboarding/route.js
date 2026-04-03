@@ -31,10 +31,6 @@ function processDeal(deal, salesDataMap) {
     const getProp = (id) => props.find(p => p.FieldId === id);
     const originalSale = salesDataMap.get(deal.ContactId);
 
-    // *** LOG ADICIONADO AQUI ***
-    // Vamos imprimir a etapa de cada negócio que a API processa.
-    console.log(`[API LOG] Processando Deal: ${deal.Id}, Etapa: ${deal.StageName}`);
-
     return {
         id: deal.Id,
         contactId: deal.ContactId,
