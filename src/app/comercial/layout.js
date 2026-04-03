@@ -1,11 +1,13 @@
 "use client";
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { useState, createContext, useContext } from 'react';
+import { useState, useEffect, useMemo, createContext, useContext } from 'react';
 
+// --- Contexto para compartilhar filtros ---
 const ComercialContext = createContext(null);
 export const useComercial = () => useContext(ComercialContext);
 
+// --- Componentes do Layout ---
 function NavLink({ href, children }) {
     const pathname = usePathname();
     const isActive = pathname.startsWith(href);
@@ -29,37 +31,39 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
 
 const MESES_ORDEM = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
+// --- O Layout Principal do Módulo Comercial ---
 export default function ComercialLayout({ children }) {
     const router = useRouter();
     
+    // Estados dos filtros que serão compartilhados com todas as páginas
     const [selectedEmpresa, setSelectedEmpresa] = useState('VMC Tech');
-    const [anos, setAnos] = useState([new Date().getFullYear()]);
+    const [anos, setAnos] = useState([]);
     const [selectedAno, setSelectedAno] = useState(new Date().getFullYear());
     const [meses, setMeses] = useState([]);
     const [selectedMeses, setSelectedMeses] = useState([]);
-    const [produtos, setProdutos] = useState(['Todos']);
+    const [produtos, setProdutos] = useState([]);
     const [selectedProduto, setSelectedProduto] = useState('Todos');
-    const [vendedores, setVendedores] = useState(['Todos']);
+    const [vendedores, setVendedores] = useState([]);
     const [selectedVendedor, setSelectedVendedor] = useState('Todos');
-    const [sdrs, setSdrs] = useState(['Todos']);
+    const [sdrs, setSdrs] = useState([]);
     const [selectedSdr, setSelectedSdr] = useState('Todos');
 
     const handleMesChange = (mes) => { setSelectedMeses(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes]); };
 
-    // CORREÇÃO: Passando os setters (setAnos, setMeses, etc.) para o contexto
+    // O valor que será compartilhado com as páginas filhas
     const contextValue = {
         selectedEmpresa, setSelectedEmpresa,
+        logoEmpresa: selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png',
         anos, setAnos,
         selectedAno, setSelectedAno,
         meses, setMeses,
-        selectedMeses, setSelectedMeses, handleMesChange,
+        selectedMeses, setSelectedMeses,
         produtos, setProdutos,
         selectedProduto, setSelectedProduto,
         vendedores, setVendedores,
         selectedVendedor, setSelectedVendedor,
         sdrs, setSdrs,
         selectedSdr, setSelectedSdr,
-        logoEmpresa: selectedEmpresa === 'VMC Tech' ? '/logo_vmctech.png' : '/logo_victec.png',
         MESES_ORDEM
     };
 
@@ -74,7 +78,10 @@ export default function ComercialLayout({ children }) {
                     <nav className="flex items-center gap-2">
                         <NavLink href="/comercial/resultados">📊 Resultados</NavLink>
                         <NavLink href="/comercial/desempenho">🏆 Desempenho</NavLink>
-                        <NavLink href="/comercial/customer-success">❤️ Customer Success</NavLink>
+                        
+                        {/* AQUI ESTÁ A ALTERAÇÃO: O botão foi "comentado" e não será mais renderizado */}
+                        {/* <NavLink href="/comercial/customer-success">❤️ Customer Success</NavLink> */}
+                        
                         <NavLink href="/comercial/inadimplencia">📋 Inadimplência</NavLink>
                     </nav>
                     <div>
@@ -85,7 +92,7 @@ export default function ComercialLayout({ children }) {
                 <div className="flex flex-1 overflow-hidden">
                     <aside className="w-64 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
                         <FilterSelect label="Empresa" value={selectedEmpresa} onChange={(e) => setSelectedEmpresa(e.target.value)} options={['VMC Tech', 'Victec']} />
-                        <FilterSelect label="Ano" value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} options={anos} disabled={anos.length <= 1} />
+                        <FilterSelect label="Ano" value={selectedAno} onChange={(e) => setSelectedAno(parseInt(e.target.value))} options={anos} disabled={anos.length === 0} />
                         <div>
                             <label className="text-xs text-white/70 block mb-1 font-bold uppercase">Meses</label>
                             <div className="bg-acelerar-dark-blue p-2 rounded-md border border-white/20 max-h-48 overflow-y-auto">
