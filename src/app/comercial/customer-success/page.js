@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useComercial } from '../layout';
 import OnboardingFunnelChart from './OnboardingFunnelChart';
-import OnboardingClientsTable from './OnboardingClientsTable'; // 1. IMPORTA o novo componente da tabela
+import OnboardingClientsTable from './OnboardingClientsTable';
 
 // --- Componente KpiCard (sem alterações) ---
 function KpiCard({ title, value, icon, legend, format = (v) => v }) {
@@ -86,8 +86,10 @@ export default function CustomerSuccessPage() {
         setSelectedMeses(mesesNomes);
     }, [selectedAno, onboardingDeals, setMeses, setSelectedMeses, MESES_ORDEM]);
 
+    // --- LÓGICA DE CÁLCULO COM PROTEÇÃO ADICIONAL ---
     const { onboardingKpis, dealsAtivosRecentes } = useMemo(() => {
-        if (loadingCS || onboardingDeals.length === 0) {
+        // GUARDA DE SEGURANÇA: Não faz NADA até que os dados e os filtros de mês estejam prontos.
+        if (loadingCS || onboardingDeals.length === 0 || selectedMeses.length === 0) {
             return { onboardingKpis: {}, dealsAtivosRecentes: [] };
         }
 
@@ -157,8 +159,7 @@ export default function CustomerSuccessPage() {
                         </div>
                         
                         <OnboardingFunnelChart activeDeals={dealsAtivosRecentes} />
-
-                        {/* 2. SUBSTITUI o placeholder final pela tabela */}
+                        
                         <OnboardingClientsTable activeDeals={dealsAtivosRecentes} />
                     </div>
                 )}
