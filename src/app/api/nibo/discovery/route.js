@@ -1,10 +1,8 @@
 // Arquivo: src/app/api/nibo/discovery/route.js
 import { NextResponse } from 'next/server';
 
-// URL base da API do NIBO, sem a versão
 const NIBO_API_URL = 'https://api.nibo.com.br';
 
-// Função auxiliar para fazer chamadas à API do NIBO
 async function fetchNiboData(empresa, endpoint ) {
     const apiKey = empresa === 'Victec' 
         ? process.env.NIBO_API_KEY_VICTEC 
@@ -14,7 +12,6 @@ async function fetchNiboData(empresa, endpoint ) {
         throw new Error(`Chave de API do NIBO não encontrada para a empresa: ${empresa}`);
     }
 
-    // A URL completa é montada aqui, incluindo a versão no endpoint
     const url = `${NIBO_API_URL}${endpoint}`;
     
     const response = await fetch(url, {
@@ -34,17 +31,16 @@ async function fetchNiboData(empresa, endpoint ) {
     return response.json();
 }
 
-// A função principal da nossa rota de API
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa') || 'VMC Tech';
 
     try {
-        // --- AQUI ESTÁ A CORREÇÃO ---
-        // Usando os caminhos corretos que incluem a versão /v2/
+        // --- AQUI ESTÁ A CORREÇÃO FINAL ---
+        // Usando o caminho correto para Lançamentos Contábeis
         const [contasAReceber, lancamentosContabeis] = await Promise.all([
             fetchNiboData(empresa, '/v2/receivables'),
-            fetchNiboData(empresa, '/v2/entries')
+            fetchNiboData(empresa, '/v2/accounting/entries') // CORRIGIDO
         ]);
 
         return NextResponse.json({
