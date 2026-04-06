@@ -1,14 +1,8 @@
 // Arquivo: src/app/comercial/inadimplencia/components/InadimplenciaDonutChart.js
 "use client";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Cores para as fatias do gráfico, alinhadas com a paleta do projeto
-const COLORS = {
-    '0-30 dias': '#a0aec0',      // cinza
-    '31-60 dias': '#f6e05e',     // amarelo (gold-light)
-    '61-90 dias': '#f56565',     // vermelho claro
-    '> 90 dias': '#c53030',      // vermelho escuro
-};
+const COLORS = { '0-30 dias': '#a0aec0', '31-60 dias': '#f6e05e', '61-90 dias': '#f56565', '> 90 dias': '#c53030' };
 
 export default function InadimplenciaDonutChart({ data }) {
     if (!data || data.every(item => item.value === 0)) {
@@ -25,25 +19,23 @@ export default function InadimplenciaDonutChart({ data }) {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        outerRadius={80}
+                        outerRadius={100} // Aumentado para melhor visualização do label
+                        innerRadius={50}  // Cria o efeito "Donut"
                         fill="#8884d8"
                         dataKey="value"
                         nameKey="name"
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        // CORREÇÃO: Label agora mostra apenas o percentual
+                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                     >
-                        {data.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
-                        ))}
+                        {data.map((entry) => ( <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} /> ))}
                     </Pie>
                     <Tooltip
-                        contentStyle={{
-                            backgroundColor: '#1a202c',
-                            borderColor: '#4a5568',
-                            color: '#fff'
-                        }}
-                        formatter={(value) => [value, 'Clientes']}
+                        contentStyle={{ backgroundColor: '#1a202c', borderColor: '#4a5568', color: '#fff' }}
+                        // CORREÇÃO: Tooltip agora mostra o nome da faixa e o número de clientes
+                        formatter={(value, name) => [`${value} cliente(s)`, name]}
+                        labelFormatter={() => ''} // Oculta o label principal do tooltip
                     />
-                    <Legend />
+                    {/* CORREÇÃO: Legenda removida */}
                 </PieChart>
             </ResponsiveContainer>
         </div>
