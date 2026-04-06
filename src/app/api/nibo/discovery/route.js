@@ -1,7 +1,6 @@
 // Arquivo: src/app/api/nibo/discovery/route.js
 import { NextResponse } from 'next/server';
 
-// URL base da API v1 do NIBO
 const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
 async function fetchNiboData(empresa, endpoint ) {
@@ -13,15 +12,12 @@ async function fetchNiboData(empresa, endpoint ) {
         throw new Error(`Chave de API do NIBO (v1) não encontrada para a empresa: ${empresa}`);
     }
 
-    // A API v1 permite passar o token como parâmetro na URL.
-    // O '?' ou '&' é adicionado para concatenar corretamente.
     const separator = endpoint.includes('?') ? '&' : '?';
     const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}`;
     
     const response = await fetch(url, {
         method: 'GET',
         headers: {
-            // Embora o token esteja na URL, é boa prática manter o Content-Type.
             'Content-Type': 'application/json'
         },
         cache: 'no-store',
@@ -40,19 +36,24 @@ export async function GET(request) {
     const empresa = searchParams.get('empresa') || 'VMC Tech';
 
     try {
-        // --- Endpoint CORRETO da API v1 para Inadimplência ---
-        // Este endpoint busca "recebimentos em aberto", que é o que precisamos.
-        // Adicionamos $orderby, que é obrigatório para paginação na API v1.
-        const contasAReceber = await fetchNiboData(empresa, '/schedules/credit?$filter=isPaid eq false and dueDate lt \'now\'&$orderby=dueDate');
-        
-        // NOTA: A API v1 não parece ter um endpoint simples para "lançamentos contábeis" como a v2.
-        // Vamos focar em resolver a Inadimplência primeiro, que agora temos o caminho.
+        // --- AQUI ESTÁ A CORREÇÃO ---
+        // 1. Gerar a data/hora atual no formato UTC (padrão de APIs)
+        const now = new Date();
+        // 2. Formatar a data para o padrão OData: YYYY-MM-DDTHH:mm:ss
+        const odataDate = now.toISOString().slice(0, 19);
 
+        // 3. Construir o filtro com a data formatada corretamente
+        const filter = `$filter=isPaid eq false and dueDate lt datetime'${odataDate}'`;
+        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate`;
+
+        const contasAReceber = await fetchNiboData(empresa, endpoint);
+        
         return NextResponse.json({
             empresa,
             status: "SUCESSO",
             api_version: "v1",
             validacao: "Conexão com a API v1 do NIBO estabelecida. Dados de inadimplência obtidos.",
+            endpoint_utilizado: endpoint, // Adicionei para vermos a URL exata que foi usada
             amostra_contas_a_receber: contasAReceber.items || contasAReceber,
         });
 
