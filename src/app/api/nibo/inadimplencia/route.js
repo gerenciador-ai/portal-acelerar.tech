@@ -41,16 +41,22 @@ export async function GET(request) {
         const today = new Date().toISOString().slice(0, 10);
         const filter = `$filter=isPaid eq false and dueDate lt ${today}`;
         
-        // --- CORREÇÃO: Removido o parâmetro inválido '$expand=category' ---
-        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate`;
+        // Adicionamos o $expand=stakeholder para garantir que os dados do cliente sempre venham
+        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate&$expand=stakeholder,category`;
 
         const result = await fetchNiboData(apiKey, endpoint);
         const inadimplenciaBruta = result.items || [];
 
         const categoriaAlvo = "311014001 Receita de Serviços - Mercado Interno";
-        const inadimplenciaFiltrada = inadimplenciaBruta.filter(item => 
-            item.category?.name === categoriaAlvo
-        );
+
+        // --- CORREÇÃO: Aplicação dos 3 filtros em sequência ---
+        const inadimplenciaFiltrada = inadimplenciaBruta.filter(item => {
+            const filtroBaixa = !item.writeOffDate; // 1. Exclui se tiver data de baixa
+            const filtroClienteExcluido = !item.stakeholder?.isDeleted; // 2. Exclui se o cliente foi deletado
+            const filtroCategoria = item.category?.name === categoriaAlvo; // 3. Mantém apenas a categoria correta
+
+            return filtroBaixa && filtroClienteExcluido && filtroCategoria;
+        });
 
         const dadosTratados = inadimplenciaFiltrada.map(item => ({
             clienteNome: item.stakeholder?.name || 'Cliente não identificado',
