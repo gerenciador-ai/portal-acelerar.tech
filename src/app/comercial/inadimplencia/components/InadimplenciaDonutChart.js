@@ -4,6 +4,20 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = { '0-30 dias': '#a0aec0', '31-60 dias': '#f6e05e', '61-90 dias': '#f56565', '> 90 dias': '#c53030' };
 
+// Componente customizado para o Tooltip, seguindo o padrão do projeto
+const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div className="bg-acelerar-dark-blue p-3 border border-white/20 rounded-md shadow-lg text-white">
+                <p className="font-bold text-lg">{data.name}</p>
+                <p className="text-sm">{`Clientes: ${data.value}`}</p>
+            </div>
+        );
+    }
+    return null;
+};
+
 export default function InadimplenciaDonutChart({ data }) {
     if (!data || data.every(item => item.value === 0)) {
         return <div className="text-center text-white/50 p-4">Sem dados para exibir no gráfico.</div>;
@@ -24,16 +38,12 @@ export default function InadimplenciaDonutChart({ data }) {
                         fill="#8884d8"
                         dataKey="value"
                         nameKey="name"
-                        // CORREÇÃO: O nome da faixa e o percentual estão de volta no label.
                         label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                     >
                         {data.map((entry) => ( <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} /> ))}
                     </Pie>
-                    <Tooltip
-                        contentStyle={{ backgroundColor: '#1a202c', borderColor: '#4a5568', color: '#fff' }}
-                        formatter={(value, name) => [`${value} cliente(s)`, name]}
-                    />
-                    {/* A legenda permanece removida, como ordenado. */}
+                    {/* CORREÇÃO: Usando o componente de Tooltip customizado */}
+                    <Tooltip content={<CustomTooltip />} />
                 </PieChart>
             </ResponsiveContainer>
         </div>
