@@ -3,8 +3,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useComercial } from '../layout';
-// 1. ALTERAÇÃO: Importar o novo componente de KPI
+
+// 1. ALTERAÇÃO: Importar todos os componentes de visualização
 import InadimplenciaKpiCards from './components/InadimplenciaKpiCards';
+import InadimplenciaDonutChart from './components/InadimplenciaDonutChart';
+import InadimplenciaSummaryTable from './components/InadimplenciaSummaryTable';
+import InadimplenciaDetailTable from './components/InadimplenciaDetailTable';
 
 // --- Funções Auxiliares de Cálculo ---
 
@@ -105,7 +109,7 @@ export default function InadimplenciaView() {
             valorTotal: c.valorTotal,
             mensalidadesAtraso: c.parcelas.length,
             faixaAtraso: c.faixaMaisGrave,
-        }));
+        })).sort((a, b) => b.valorTotal - a.valorTotal); // Ordena por maior valor total
 
         return {
             kpis: {
@@ -128,25 +132,19 @@ export default function InadimplenciaView() {
         <div className="space-y-6">
             <h2 className="text-xl font-semibold text-white">Painel de Inadimplência - {context.selectedEmpresa}</h2>
             
-            {/* 2. ALTERAÇÃO: O placeholder foi substituído pelo componente real */}
             <InadimplenciaKpiCards kpis={processedData.kpis} />
             
-            {/* Placeholders restantes */}
+            {/* 2. ALTERAÇÃO: Substituição dos placeholders restantes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 bg-black/20 p-4 rounded-lg border border-white/10">
-                    <p className="font-bold text-acelerar-gold-light">Gráfico de Rosca (Placeholder)</p>
-                     <pre className="text-xs text-cyan-400 mt-2 bg-black/30 p-2 rounded">
-                        {JSON.stringify(processedData.donutChartData, null, 2)}
-                    </pre>
+                    <InadimplenciaDonutChart data={processedData.donutChartData} />
                 </div>
                 <div className="lg:col-span-2 bg-black/20 p-4 rounded-lg border border-white/10">
-                    <p className="font-bold text-acelerar-gold-light">Tabela Resumo por Cliente (Placeholder)</p>
-                    <p className="text-white/70 text-sm mt-2">Total de clientes na tabela: {processedData.summaryTableData.length}</p>
+                    <InadimplenciaSummaryTable data={processedData.summaryTableData} />
                 </div>
             </div>
             <div className="bg-black/20 p-4 rounded-lg border border-white/10">
-                <p className="font-bold text-acelerar-gold-light">Tabela Detalhada de Parcelas (Placeholder)</p>
-                <p className="text-white/70 text-sm mt-2">Total de parcelas na tabela: {processedData.detailTableData.length}</p>
+                <InadimplenciaDetailTable data={processedData.detailTableData} empresa={context.selectedEmpresa} />
             </div>
         </div>
     );
