@@ -43,29 +43,30 @@ export async function GET(request) {
         // Filtro para buscar contas a receber não pagas e vencidas
         const today = new Date().toISOString().slice(0, 10); // Formato YYYY-MM-DD
         const filter = `$filter=isPaid eq false and dueDate lt ${today}`;
-        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate`;
+        // Adicionamos o $expand=category para garantir que os dados da categoria sempre venham
+        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate&$expand=category`;
 
         const result = await fetchNiboData(apiKey, endpoint);
         const inadimplenciaBruta = result.items || [];
 
-        // --- Mapeamento e Limpeza dos Dados ---
-        // Transformamos os dados brutos em um formato limpo e padronizado para o frontend.
-        const dadosTratados = inadimplenciaBruta.map(item => ({
+        // --- 1. ALTERAÇÃO: Filtrar pela categoria correta ---
+        const categoriaAlvo = "311014001 Receita de Serviços - Mercado Interno";
+        const inadimplenciaFiltrada = inadimplenciaBruta.filter(item => 
+            item.category?.name === categoriaAlvo
+        );
+
+        // --- 2. ALTERAÇÃO: Mapear a partir dos dados já filtrados ---
+        const dadosTratados = inadimplenciaFiltrada.map(item => ({
             clienteNome: item.stakeholder?.name || 'Cliente não identificado',
             clienteCpfCnpj: item.stakeholder?.cpfCnpj || 'N/A',
             valor: item.openValue,
             vencimento: item.dueDate,
             descricao: item.description,
             idParcela: item.scheduleId,
+            // Adicionado para validação
+            categoryName: item.category?.name 
         }));
 
         return NextResponse.json(dadosTratados);
 
     } catch (error) {
-        console.error('Erro detalhado na API de Inadimplência:', error);
-        return NextResponse.json({ 
-            error: 'Falha ao buscar dados de inadimplência do NIBO.', 
-            details: error.message 
-        }, { status: 500 });
-    }
-}
