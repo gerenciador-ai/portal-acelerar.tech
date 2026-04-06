@@ -35,9 +35,10 @@ export default function InadimplenciaDetailTable({ data, empresa }) {
         <div>
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-white">Detalhamento das Parcelas</h3>
+                {/* CORREÇÃO FINAL: Classes do botão atualizadas para o padrão EXATO da imagem. */}
                 <button
                     onClick={handleExportCSV}
-                    className="px-4 py-2 text-sm font-semibold bg-acelerar-gold-light text-acelerar-dark-blue rounded-md hover:bg-yellow-300 transition-colors"
+                    className="px-4 py-2 text-sm font-semibold bg-acelerar-light-blue text-white rounded-md hover:bg-blue-400 transition-colors"
                 >
                     Exportar CSV
                 </button>
