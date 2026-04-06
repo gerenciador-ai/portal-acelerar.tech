@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 
 const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
-// Função reutilizável para buscar dados da API v1 do NIBO
 async function fetchNiboData(apiKey, endpoint ) {
     if (!apiKey) {
         throw new Error(`Chave de API do NIBO (v1) não fornecida.`);
@@ -15,7 +14,7 @@ async function fetchNiboData(apiKey, endpoint ) {
     const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store', // Essencial para dados financeiros sempre atualizados
+        cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -26,10 +25,9 @@ async function fetchNiboData(apiKey, endpoint ) {
     return response.json();
 }
 
-// Função principal da rota, que busca e processa os dados de inadimplência
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
-    const empresa = searchParams.get('empresa'); // 'VMC Tech' ou 'Victec'
+    const empresa = searchParams.get('empresa');
 
     if (!empresa) {
         return NextResponse.json({ error: 'O parâmetro "empresa" é obrigatório.' }, { status: 400 });
@@ -40,22 +38,20 @@ export async function GET(request) {
         : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // Filtro para buscar contas a receber não pagas e vencidas
-        const today = new Date().toISOString().slice(0, 10); // Formato YYYY-MM-DD
+        const today = new Date().toISOString().slice(0, 10);
         const filter = `$filter=isPaid eq false and dueDate lt ${today}`;
-        // Adicionamos o $expand=category para garantir que os dados da categoria sempre venham
-        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate&$expand=category`;
+        
+        // --- CORREÇÃO: Removido o parâmetro inválido '$expand=category' ---
+        const endpoint = `/schedules/credit?${filter}&$orderby=dueDate`;
 
         const result = await fetchNiboData(apiKey, endpoint);
         const inadimplenciaBruta = result.items || [];
 
-        // --- 1. ALTERAÇÃO: Filtrar pela categoria correta ---
         const categoriaAlvo = "311014001 Receita de Serviços - Mercado Interno";
         const inadimplenciaFiltrada = inadimplenciaBruta.filter(item => 
             item.category?.name === categoriaAlvo
         );
 
-        // --- 2. ALTERAÇÃO: Mapear a partir dos dados já filtrados ---
         const dadosTratados = inadimplenciaFiltrada.map(item => ({
             clienteNome: item.stakeholder?.name || 'Cliente não identificado',
             clienteCpfCnpj: item.stakeholder?.cpfCnpj || 'N/A',
@@ -63,10 +59,16 @@ export async function GET(request) {
             vencimento: item.dueDate,
             descricao: item.description,
             idParcela: item.scheduleId,
-            // Adicionado para validação
-            categoryName: item.category?.name 
+            categoryName: item.category?.name
         }));
 
         return NextResponse.json(dadosTratados);
 
     } catch (error) {
+        console.error('Erro detalhado na API de Inadimplência:', error);
+        return NextResponse.json({ 
+            error: 'Falha ao buscar dados de inadimplência do NIBO.', 
+            details: error.message 
+        }, { status: 500 });
+    }
+}
