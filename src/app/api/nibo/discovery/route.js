@@ -1,7 +1,7 @@
 // Arquivo: src/app/api/nibo/discovery/route.js
 import { NextResponse } from 'next/server';
 
-// A URL base CORRETA, conforme a documentação.
+// URL base, conforme exemplos da documentação.
 const NIBO_API_URL = 'https://api.nibo.com.br';
 
 async function fetchNiboData(empresa, endpoint ) {
@@ -10,10 +10,11 @@ async function fetchNiboData(empresa, endpoint ) {
         : process.env.NIBO_API_KEY_VMCTECH;
 
     if (!apiKey) {
+        // Esta verificação permanece, pois é uma boa prática.
         throw new Error(`Chave de API do NIBO não encontrada para a empresa: ${empresa}`);
     }
 
-    // A URL final será, por exemplo: https://api.nibo.com.br/v2/accounting/receivables
+    // URL final será: https://api.nibo.com.br/v2/receivables
     const url = `${NIBO_API_URL}${endpoint}`;
     
     const response = await fetch(url, {
@@ -27,7 +28,6 @@ async function fetchNiboData(empresa, endpoint ) {
 
     if (!response.ok) {
         const errorBody = await response.text();
-        // Adicionei a URL na mensagem de erro para facilitar a depuração futura
         throw new Error(`Erro na API do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
     }
 
@@ -39,10 +39,10 @@ export async function GET(request) {
     const empresa = searchParams.get('empresa') || 'VMC Tech';
 
     try {
-        // --- Endpoints CORRETOS e COMPLETOS ---
+        // --- Endpoints literais da documentação ---
         const [contasAReceber, lancamentosContabeis] = await Promise.all([
-            fetchNiboData(empresa, '/v2/accounting/receivables'), // Para Inadimplência
-            fetchNiboData(empresa, '/v2/accounting/entries')      // Para DRE/DFC
+            fetchNiboData(empresa, '/v2/receivables'), // Endpoint exato da seção "Contas a Receber"
+            fetchNiboData(empresa, '/v2/entries')      // Endpoint exato da seção "Lançamentos Contábeis"
         ]);
 
         return NextResponse.json({
