@@ -37,13 +37,12 @@ export async function GET(request) {
 
     try {
         // --- AQUI ESTÁ A CORREÇÃO ---
-        // 1. Gerar a data/hora atual no formato UTC (padrão de APIs)
-        const now = new Date();
-        // 2. Formatar a data para o padrão OData: YYYY-MM-DDTHH:mm:ss
-        const odataDate = now.toISOString().slice(0, 19);
+        // A API do NIBO parece esperar a data diretamente, sem o prefixo 'datetime'.
+        // Vamos manter o formato YYYY-MM-DD, que é universal.
+        const today = new Date().toISOString().slice(0, 10); // Formato YYYY-MM-DD
 
-        // 3. Construir o filtro com a data formatada corretamente
-        const filter = `$filter=isPaid eq false and dueDate lt datetime'${odataDate}'`;
+        // Construir o filtro com a data simples.
+        const filter = `$filter=isPaid eq false and dueDate lt ${today}`;
         const endpoint = `/schedules/credit?${filter}&$orderby=dueDate`;
 
         const contasAReceber = await fetchNiboData(empresa, endpoint);
@@ -53,7 +52,7 @@ export async function GET(request) {
             status: "SUCESSO",
             api_version: "v1",
             validacao: "Conexão com a API v1 do NIBO estabelecida. Dados de inadimplência obtidos.",
-            endpoint_utilizado: endpoint, // Adicionei para vermos a URL exata que foi usada
+            endpoint_utilizado: endpoint,
             amostra_contas_a_receber: contasAReceber.items || contasAReceber,
         });
 
