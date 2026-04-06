@@ -3,17 +3,17 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useComercial } from '../layout';
+// 1. ALTERAÇÃO: Importar o novo componente de KPI
+import InadimplenciaKpiCards from './components/InadimplenciaKpiCards';
 
 // --- Funções Auxiliares de Cálculo ---
 
-// Calcula a diferença de dias entre duas datas
 const diffInDays = (date1, date2) => {
     const d1 = new Date(date1);
     const d2 = new Date(date2);
     return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
 };
 
-// Determina a faixa de atraso com base nos dias
 const getFaixaAtraso = (dias) => {
     if (dias <= 30) return '0-30 dias';
     if (dias <= 60) return '31-60 dias';
@@ -21,7 +21,6 @@ const getFaixaAtraso = (dias) => {
     return '> 90 dias';
 };
 
-// Ordena as faixas de atraso da menos grave para a mais grave
 const faixaOrder = { '0-30 dias': 1, '31-60 dias': 2, '61-90 dias': 3, '> 90 dias': 4 };
 
 // --- Componente Principal ---
@@ -33,7 +32,6 @@ export default function InadimplenciaView() {
 
     const context = useComercial();
 
-    // 1. BUSCA DE DADOS
     useEffect(() => {
         if (!context || !context.selectedEmpresa) return;
 
@@ -59,7 +57,6 @@ export default function InadimplenciaView() {
         fetchInadimplencia();
     }, [context]);
 
-    // 2. PROCESSAMENTO E CÁLCULO DOS DADOS (usando useMemo para performance)
     const processedData = useMemo(() => {
         if (rawData.length === 0) {
             return {
@@ -76,10 +73,8 @@ export default function InadimplenciaView() {
             return { ...p, diasAtraso, faixaAtraso: getFaixaAtraso(diasAtraso) };
         });
 
-        // --- Cálculo para KPIs ---
         const totalAberto = parcelasComAtraso.reduce((sum, p) => sum + p.valor, 0);
         
-        // --- Agrupamento por Cliente para Gráfico e Tabela Resumo ---
         const clientes = {};
         parcelasComAtraso.forEach(p => {
             const id = p.clienteCpfCnpj;
@@ -94,20 +89,17 @@ export default function InadimplenciaView() {
             }
             clientes[id].parcelas.push(p);
             clientes[id].valorTotal += p.valor;
-            // Atualiza para a faixa mais grave
             if (faixaOrder[p.faixaAtraso] > faixaOrder[clientes[id].faixaMaisGrave]) {
                 clientes[id].faixaMaisGrave = p.faixaAtraso;
             }
         });
 
-        // --- Dados para o Gráfico de Rosca ---
         const faixasCount = { '0-30 dias': 0, '31-60 dias': 0, '61-90 dias': 0, '> 90 dias': 0 };
         Object.values(clientes).forEach(c => {
             faixasCount[c.faixaMaisGrave]++;
         });
         const donutChartData = Object.entries(faixasCount).map(([name, value]) => ({ name, value }));
 
-        // --- Dados para a Tabela Resumo ---
         const summaryTableData = Object.values(clientes).map(c => ({
             cliente: c.nome,
             valorTotal: c.valorTotal,
@@ -123,12 +115,11 @@ export default function InadimplenciaView() {
             },
             donutChartData,
             summaryTableData,
-            detailTableData: parcelasComAtraso, // Tabela detalhada usa os dados já com a faixa calculada
+            detailTableData: parcelasComAtraso,
         };
 
     }, [rawData]);
 
-    // 3. RENDERIZAÇÃO
     if (!context) return <div className="text-center p-10 text-white/80">Inicializando...</div>;
     if (loading) return <div className="text-center p-10 text-white/80">Carregando e processando dados do NIBO para {context.selectedEmpresa}...</div>;
     if (error) return <div className="text-center p-10 bg-red-900/50 border border-red-700 rounded-lg text-white">{error}</div>;
@@ -137,13 +128,10 @@ export default function InadimplenciaView() {
         <div className="space-y-6">
             <h2 className="text-xl font-semibold text-white">Painel de Inadimplência - {context.selectedEmpresa}</h2>
             
-            {/* PLACEHOLDERS - Serão substituídos pelos componentes reais que receberão 'processedData' */}
-            <div className="bg-black/20 p-4 rounded-lg border border-white/10">
-                <p className="font-bold text-acelerar-gold-light">KPI Cards (Placeholder)</p>
-                <pre className="text-xs text-green-400 mt-2 bg-black/30 p-2 rounded">
-                    {JSON.stringify(processedData.kpis, null, 2)}
-                </pre>
-            </div>
+            {/* 2. ALTERAÇÃO: O placeholder foi substituído pelo componente real */}
+            <InadimplenciaKpiCards kpis={processedData.kpis} />
+            
+            {/* Placeholders restantes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 bg-black/20 p-4 rounded-lg border border-white/10">
                     <p className="font-bold text-acelerar-gold-light">Gráfico de Rosca (Placeholder)</p>
