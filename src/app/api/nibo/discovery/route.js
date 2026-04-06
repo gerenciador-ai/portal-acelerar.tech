@@ -36,20 +36,15 @@ export async function GET(request) {
     const empresa = searchParams.get('empresa') || 'VMC Tech';
 
     try {
-        // --- AQUI ESTÁ A CORREÇÃO FINAL ---
-        // Usando o caminho correto para Lançamentos Contábeis
-        const [contasAReceber, lancamentosContabeis] = await Promise.all([
-            fetchNiboData(empresa, '/v2/receivables'),
-            fetchNiboData(empresa, '/v2/accounting/entries') // CORRIGIDO
-        ]);
+        // --- FOCO TOTAL EM APENAS UM ENDPOINT ---
+        // Vamos validar o endpoint de Contas a Receber primeiro.
+        const contasAReceber = await fetchNiboData(empresa, '/v2/accounting/receivables');
 
         return NextResponse.json({
             empresa,
-            documentacao: "https://nibo.readme.io/reference/getting-started-with-your-api",
-            validacao: "Dados brutos da API do NIBO para análise e mapeamento.",
+            validacao: "Dados brutos de CONTAS A RECEBER para análise.",
             amostra_contas_a_receber: contasAReceber.items || contasAReceber,
-            amostra_lancamentos_contabeis: lancamentosContabeis.items || lancamentosContabeis,
-        } );
+        });
 
     } catch (error) {
         return NextResponse.json({ 
