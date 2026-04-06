@@ -19,23 +19,21 @@ export default function InadimplenciaDonutChart({ data }) {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        outerRadius={100} // Aumentado para melhor visualização do label
-                        innerRadius={50}  // Cria o efeito "Donut"
+                        outerRadius={80}
+                        innerRadius={40}
                         fill="#8884d8"
                         dataKey="value"
                         nameKey="name"
-                        // CORREÇÃO: Label agora mostra apenas o percentual
-                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                        // CORREÇÃO: O nome da faixa e o percentual estão de volta no label.
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                     >
                         {data.map((entry) => ( <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} /> ))}
                     </Pie>
                     <Tooltip
                         contentStyle={{ backgroundColor: '#1a202c', borderColor: '#4a5568', color: '#fff' }}
-                        // CORREÇÃO: Tooltip agora mostra o nome da faixa e o número de clientes
                         formatter={(value, name) => [`${value} cliente(s)`, name]}
-                        labelFormatter={() => ''} // Oculta o label principal do tooltip
                     />
-                    {/* CORREÇÃO: Legenda removida */}
+                    {/* A legenda permanece removida, como ordenado. */}
                 </PieChart>
             </ResponsiveContainer>
         </div>
