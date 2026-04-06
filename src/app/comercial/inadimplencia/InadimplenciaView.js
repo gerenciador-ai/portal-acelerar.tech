@@ -4,7 +4,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useComercial } from '../layout';
 
-// 1. ALTERAÇÃO: Importar todos os componentes de visualização
 import InadimplenciaKpiCards from './components/InadimplenciaKpiCards';
 import InadimplenciaDonutChart from './components/InadimplenciaDonutChart';
 import InadimplenciaSummaryTable from './components/InadimplenciaSummaryTable';
@@ -25,6 +24,7 @@ const getFaixaAtraso = (dias) => {
     return '> 90 dias';
 };
 
+// Objeto para dar peso numérico à gravidade da faixa de atraso
 const faixaOrder = { '0-30 dias': 1, '31-60 dias': 2, '61-90 dias': 3, '> 90 dias': 4 };
 
 // --- Componente Principal ---
@@ -109,7 +109,17 @@ export default function InadimplenciaView() {
             valorTotal: c.valorTotal,
             mensalidadesAtraso: c.parcelas.length,
             faixaAtraso: c.faixaMaisGrave,
-        })).sort((a, b) => b.valorTotal - a.valorTotal); // Ordena por maior valor total
+        }))
+        // --- CORREÇÃO NA ORDENAÇÃO ---
+        .sort((a, b) => {
+            // Primeiro, ordena pela faixa de atraso, da mais grave para a menos grave
+            const faixaCompare = faixaOrder[b.faixaAtraso] - faixaOrder[a.faixaAtraso];
+            if (faixaCompare !== 0) {
+                return faixaCompare;
+            }
+            // Se a faixa for a mesma, ordena pelo maior valor total (desempate)
+            return b.valorTotal - a.valorTotal;
+        });
 
         return {
             kpis: {
@@ -134,7 +144,6 @@ export default function InadimplenciaView() {
             
             <InadimplenciaKpiCards kpis={processedData.kpis} />
             
-            {/* 2. ALTERAÇÃO: Substituição dos placeholders restantes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 bg-black/20 p-4 rounded-lg border border-white/10">
                     <InadimplenciaDonutChart data={processedData.donutChartData} />
