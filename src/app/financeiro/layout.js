@@ -7,13 +7,15 @@ import Image from 'next/image';
 function NavLink({ href, children }) {
     const pathname = usePathname();
     const isActive = pathname === href;
+
+    // --- CORREÇÃO: Estilo do botão ativo alterado para o padrão azul ---
     return (
         <a 
             href={href} 
             className={`block w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive 
-                ? 'bg-acelerar-gold-light text-acelerar-dark-blue' 
-                : 'text-white hover:bg-white/10'
+                ? 'bg-acelerar-light-blue text-white' // Estilo "aceso"
+                : 'text-white/70 hover:bg-white/10 hover:text-white' // Estilo inativo
             }`}
         >
             {children}
