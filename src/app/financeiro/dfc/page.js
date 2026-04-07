@@ -45,7 +45,7 @@ export default function DFCPage() {
             <div className="flex items-center border-b border-white/10 mb-6">
                 <EmpresaTab 
                     nome="Consolidado" 
-                    // --- CORREÇÃO: Caminho da imagem corrigido ---
+                    // --- CORREÇÃO FINAL E DEFINITIVA: Caminho da imagem corrigido com o underscore. ---
                     logo="/logo_acelerar_icon.png"
                     isActive={empresaAtiva === 'Consolidado'} 
                     onClick={() => setEmpresaAtiva('Consolidado')} 
