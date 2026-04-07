@@ -1,3 +1,4 @@
+// Arquivo: src/app/dashboard/page.js
 "use client";
 
 import { createBrowserClient } from '@supabase/ssr';
@@ -23,17 +24,17 @@ const ALL_ENVIRONMENTS = {
   COMERCIAL: {
     title: "Comercial",
     description: "Análise de vendas, funis e performance da equipe.",
-    href: "/comercial" // Caminho para a nova página
+    href: "/comercial"
   },
   FINANCEIRO: {
     title: "Financeiro",
     description: "Visão consolidada das finanças e fluxo de caixa.",
-    href: "/financeiro" // Futuro caminho
+    href: "/financeiro"
   },
   GENTE_E_GESTAO: {
     title: "Gente & Gestão",
     description: "Painel de indicadores e gestão de colaboradores.",
-    href: "/gente-e-gestao" // Futuro caminho
+    href: "/gente-e-gestao"
   }
 };
 
@@ -44,6 +45,7 @@ export default function DashboardPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
+  // A lógica de permissões permanece, mas não será usada para renderizar por enquanto
   const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,12 +92,13 @@ export default function DashboardPage() {
         </h2>
 
         {loading ? (
-          <p>Carregando permissões...</p>
+          <p>Carregando...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {userPermissions.map(permissionKey => {
-              const env = ALL_ENVIRONMENTS[permissionKey];
-              if (!env) return null;
+            {/* --- CORREÇÃO PARA DESENVOLVIMENTO --- */}
+            {/* Mapeia diretamente TODOS os ambientes, ignorando as permissões do usuário por enquanto. */}
+            {Object.keys(ALL_ENVIRONMENTS).map(envKey => {
+              const env = ALL_ENVIRONMENTS[envKey];
               return <EnvironmentCard key={env.title} title={env.title} description={env.description} href={env.href} />;
             })}
           </div>
