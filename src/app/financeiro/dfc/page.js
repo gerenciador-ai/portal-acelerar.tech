@@ -22,7 +22,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
 
 // --- Página Principal do DFC ---
 export default function DFCPage() {
-    const [empresaAtiva, setEmpresaAtiva] = useState(null); // Começa sem nenhuma empresa selecionada
+    const [empresaAtiva, setEmpresaAtiva] = useState(null);
 
     const renderContent = () => {
         if (!empresaAtiva) {
@@ -32,7 +32,6 @@ export default function DFCPage() {
                 </div>
             );
         }
-        // Futuramente, aqui entrará o componente <DfcView empresa={empresaAtiva} />
         return (
              <div className="flex items-center justify-center h-96 bg-black/20 rounded-lg">
                 <p className="text-white">Carregando DFC para: <span className="font-bold text-acelerar-gold-light">{empresaAtiva}</span>...</p>
@@ -46,6 +45,7 @@ export default function DFCPage() {
             <div className="flex items-center border-b border-white/10 mb-6">
                 <EmpresaTab 
                     nome="Consolidado" 
+                    // --- CORREÇÃO: Caminho da imagem corrigido ---
                     logo="/logo_acelerar_icon.png"
                     isActive={empresaAtiva === 'Consolidado'} 
                     onClick={() => setEmpresaAtiva('Consolidado')} 
