@@ -1,91 +1,59 @@
 // Arquivo: src/app/financeiro/layout.js
 "use client";
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useState, createContext, useContext } from 'react';
 
-// --- Contexto para compartilhar filtros e estado do módulo Financeiro ---
-const FinanceiroContext = createContext(null);
-export const useFinanceiro = () => useContext(FinanceiroContext);
-
-// --- Componente de Abas para Empresas ---
-function EmpresaTab({ nome, logo, isActive, onClick }) {
+// --- Componente para o Link do Menu Lateral ---
+function NavLink({ href, children }) {
+    const pathname = usePathname();
+    const isActive = pathname === href;
     return (
-        <button
-            onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
+        <a 
+            href={href} 
+            className={`block w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive 
-                ? 'border-acelerar-gold-light text-white' 
-                : 'border-transparent text-white/60 hover:bg-white/10 hover:text-white'
+                ? 'bg-acelerar-gold-light text-acelerar-dark-blue' 
+                : 'text-white hover:bg-white/10'
             }`}
         >
-            {logo && <Image src={logo} alt={`Logo ${nome}`} width={20} height={20} className="rounded-full" />}
-            <span>{nome}</span>
-        </button>
+            {children}
+        </a>
     );
 }
 
 // --- O Layout Principal do Módulo Financeiro ---
 export default function FinanceiroLayout({ children }) {
     const router = useRouter();
-    
-    // Estados que serão compartilhados com todas as páginas do módulo
-    const [empresaAtiva, setEmpresaAtiva] = useState('Consolidado'); // 'Consolidado', 'VMC Tech', 'Victec'
-    
-    const contextValue = {
-        empresaAtiva,
-        setEmpresaAtiva,
-    };
 
     return (
-        <FinanceiroContext.Provider value={contextValue}>
-            <div className="min-h-screen w-full bg-acelerar-dark-blue text-white flex flex-col">
-                {/* Cabeçalho do Módulo */}
-                <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg shrink-0 relative h-14">
-                    <div className="flex items-center gap-4">
-                        <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={120} height={120} className="drop-shadow-lg" />
-                        <h1 className="text-xl font-bold text-acelerar-gold-light ml-20">Financeiro</h1>
-                    </div>
-                    <nav className="flex items-center gap-2">
-                        {/* Links para as futuras páginas do módulo (DFC, DRE, etc.) */}
-                        <a href="/financeiro/dfc" className="px-3 py-1 text-sm font-semibold rounded-md bg-acelerar-gold-light text-acelerar-dark-blue">📊 DFC</a>
-                        {/* Adicionar outros links aqui no futuro */}
-                    </nav>
-                    <div>
-                        <button onClick={() => router.push('/dashboard')} className="text-sm text-white/70 hover:text-white transition-colors mr-4">&larr; Voltar ao Hub</button>
-                    </div>
-                </header>
-
-                {/* Corpo principal com Abas e Conteúdo */}
-                <div className="flex flex-col flex-1 overflow-hidden">
-                    {/* Barra de Abas das Empresas */}
-                    <div className="flex items-center border-b border-white/10 bg-black/10">
-                        <EmpresaTab 
-                            nome="Consolidado" 
-                            logo="/logo_acelerar_icon.png"
-                            isActive={empresaAtiva === 'Consolidado'} 
-                            onClick={() => setEmpresaAtiva('Consolidado')} 
-                        />
-                        <EmpresaTab 
-                            nome="VMC Tech" 
-                            logo="/logo_vmctech.png"
-                            isActive={empresaAtiva === 'VMC Tech'} 
-                            onClick={() => setEmpresaAtiva('VMC Tech')} 
-                        />
-                        <EmpresaTab 
-                            nome="Victec" 
-                            logo="/logo_victec.png"
-                            isActive={empresaAtiva === 'Victec'} 
-                            onClick={() => setEmpresaAtiva('Victec')} 
-                        />
-                    </div>
-                    
-                    {/* Conteúdo da Página Ativa */}
-                    <main className="flex-1 p-6 md:p-8 overflow-y-auto">
-                        {children}
-                    </main>
+        <div className="min-h-screen w-full bg-acelerar-dark-blue text-white flex flex-col">
+            {/* Cabeçalho Fixo do Portal */}
+            <header className="bg-black/20 px-4 py-2 flex justify-between items-center shadow-lg shrink-0 relative h-14">
+                <div className="flex items-center gap-4">
+                    <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={120} height={120} />
                 </div>
+                <div>
+                    <button onClick={() => router.push('/dashboard')} className="text-sm text-white/70 hover:text-white transition-colors mr-4">&larr; Voltar ao Hub</button>
+                </div>
+            </header>
+
+            {/* Corpo do Módulo com Menu Lateral */}
+            <div className="flex flex-1 overflow-hidden">
+                {/* Menu Lateral Esquerdo */}
+                <aside className="w-56 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-2">
+                    <h2 className="text-lg font-semibold text-white/90 mb-4 px-2">Relatórios</h2>
+                    <NavLink href="/financeiro/dashboard">Dashboard</NavLink>
+                    <NavLink href="/financeiro/bp">Balanço Patrimonial</NavLink>
+                    <NavLink href="/financeiro/dre">DRE</NavLink>
+                    <NavLink href="/financeiro/dfc">DFC</NavLink>
+                    {/* Outros links podem ser adicionados aqui */}
+                </aside>
+                
+                {/* Área de Conteúdo Principal */}
+                <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+                    {children}
+                </main>
             </div>
-        </FinanceiroContext.Provider>
+        </div>
     );
 }
