@@ -1,7 +1,9 @@
 // Arquivo: src/app/api/financeiro/dfc/route.js
 import { NextResponse } from 'next/server';
 
-const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
+// --- Constantes das APIs ---
+const NIBO_API_V1_URL = 'https://api.nibo.com.br/empresas/v1';
+const NIBO_API_V2_URL = 'https://api.nibo.com.br/v2';
 
 // --- Função de Mapeamento de Categorias (sem alterações ) ---
 function mapearCategoriaParaDFC(categoryName) {
@@ -13,15 +15,33 @@ function mapearCategoriaParaDFC(categoryName) {
     return 'Não Classificado';
 }
 
-// --- Função de busca na API (sem alterações) ---
-async function fetchNiboData(apiKey, endpoint) {
+// --- Funções de Busca Específicas por Versão da API ---
+
+// Função para buscar dados da API v1 (Projetado)
+async function fetchNiboV1(apiKey, endpoint) {
     if (!apiKey) throw new Error(`Chave de API do NIBO (v1) não fornecida.`);
     const separator = endpoint.includes('?') ? '&' : '?';
-    const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}`;
+    const url = `${NIBO_API_V1_URL}${endpoint}${separator}apitoken=${apiKey}`;
     const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
     if (!response.ok) {
         const errorBody = await response.text();
         throw new Error(`Erro na API v1 do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
+    }
+    return response.json();
+}
+
+// Função para buscar dados da API v2 (Realizado)
+async function fetchNiboV2(apiKey, endpoint) {
+    if (!apiKey) throw new Error(`Chave de API do NIBO (v2) não fornecida.`);
+    const url = `${NIBO_API_V2_URL}${endpoint}`;
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'access_token': apiKey, 'Content-Type': 'application/json' },
+        cache: 'no-store',
+    });
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Erro na API v2 do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
     }
     return response.json();
 }
@@ -39,12 +59,12 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // --- 1. Busca de Dados "Realizados" a partir do endpoint /entries ---
-        const resultRealizadoBruto = await fetchNiboData(apiKey, '/entries');
+        // --- 1. Busca de Dados "Realizados" (API v2) ---
+        const resultRealizadoBruto = await fetchNiboV2(apiKey, '/accounting/entries');
         const realizados = (resultRealizadoBruto.items || [])
             .filter(item => 
-                item.isReconciled === true && // Filtra por conciliados
-                item.paymentDate && new Date(item.paymentDate).getFullYear() === ano // Filtra pelo ano
+                item.isReconciled === true &&
+                item.paymentDate && new Date(item.paymentDate).getFullYear() === ano
             )
             .map(item => ({
                 data: item.paymentDate,
@@ -55,10 +75,10 @@ export async function GET(request) {
                 descricao: item.description,
             }));
 
-        // --- 2. Busca de Dados "Projetados" a partir do endpoint /schedules ---
+        // --- 2. Busca de Dados "Projetados" (API v1) ---
         const hoje = new Date().toISOString().slice(0, 10);
         const filtroProjetado = `$filter=isPaid eq false and dueDate ge ${hoje} and year(dueDate) eq ${ano}`;
-        const resultProjetado = await fetchNiboData(apiKey, `/schedules?${filtroProjetado}`);
+        const resultProjetado = await fetchNiboV1(apiKey, `/schedules?${filtroProjetado}`);
         const projetados = (resultProjetado.items || []).map(item => ({
             data: item.dueDate,
             valor: item.openValue,
