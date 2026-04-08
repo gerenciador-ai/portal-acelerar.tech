@@ -3,17 +3,7 @@ import { NextResponse } from 'next/server';
 
 const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
-// --- Função de Mapeamento de Categorias (sem alterações ) ---
-function mapearCategoriaParaDFC(categoryName) {
-    if (!categoryName) return 'Não Classificado';
-    const name = categoryName.toLowerCase();
-    if (name.includes('serviços') || name.includes('salários') || name.includes('impostos') || name.includes('fornecedores') || name.includes('aluguel')) return 'FCO';
-    if (name.includes('imobilizado') || name.includes('investimentos')) return 'FCI';
-    if (name.includes('empréstimos') || name.includes('financiamentos') || name.includes('juros pagos') || name.includes('dividendos')) return 'FCF';
-    return 'Não Classificado';
-}
-
-// --- Função de busca na API v1 (sem alterações) ---
+// Função de busca na API v1 (sem alterações )
 async function fetchNiboData(apiKey, endpoint) {
     if (!apiKey) throw new Error(`Chave de API do NIBO (v1) não fornecida.`);
     const separator = endpoint.includes('?') ? '&' : '?';
@@ -26,64 +16,40 @@ async function fetchNiboData(apiKey, endpoint) {
     return response.json();
 }
 
-// --- Função principal da rota (CORREÇÃO NO FILTRO DE ANO) ---
+// --- CÓDIGO DE DIAGNÓSTICO ---
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa');
-    const ano = searchParams.get('ano'); // Mantém como string para comparação direta
+    const ano = searchParams.get('ano');
 
     if (!empresa || !ano) {
         return NextResponse.json({ error: 'Os parâmetros "empresa" e "ano" são obrigatórios.' }, { status: 400 });
     }
 
-    const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
+    const apiKey = process.env.NIBO_API_KEY_VMCTECH; // Chave fixada para o teste
 
     try {
-        const endpoints = {
-            realizadoCredit: `/schedules/credit?$filter=isPaid eq true&$expand=stakeholder,category`,
-            realizadoDebit: `/schedules/debit?$filter=isPaid eq true&$expand=stakeholder,category`,
-        };
+        // 1. Buscar TODOS os recebimentos pagos, sem filtro de data na URL
+        const endpoint = `/schedules/credit?$filter=isPaid eq true&$expand=stakeholder`;
+        const resultadoBruto = await fetchNiboData(apiKey, endpoint);
 
-        const [
-            resRealizadoCredit,
-            resRealizadoDebit,
-        ] = await Promise.all([
-            fetchNiboData(apiKey, endpoints.realizadoCredit),
-            fetchNiboData(apiKey, endpoints.realizadoDebit),
-        ]);
+        const clienteAlvo = "FERNANDES E SILVA SOLUCOES EMPRESARIAIS S/S";
+        const anoAlvo = "2026";
 
-        const todosOsItensPagos = [
-            ...(resRealizadoCredit.items || []).map(item => ({ ...item, tipo: 'entrada' })),
-            ...(resRealizadoDebit.items || []).map(item => ({ ...item, tipo: 'saida' })),
-        ];
+        // 2. Filtrar no nosso código, de forma explícita e segura
+        const lancamentosDoCliente = (resultadoBruto.items || []).filter(item => {
+            const nomeCorreto = item.stakeholder?.name === clienteAlvo;
+            const anoCorreto = item.paymentDate && item.paymentDate.startsWith(anoAlvo);
+            return nomeCorreto && anoCorreto;
+        });
 
-        const dadosDFC = todosOsItensPagos
-            .filter(item => {
-                // --- CORREÇÃO APLICADA AQUI ---
-                // Compara o ano como string para evitar erros de fuso horário.
-                const filtroAno = item.paymentDate && item.paymentDate.substring(0, 4) === ano;
-                
-                const filtroBaixa = !item.writeOffDate;
-                const filtroClienteExcluido = !item.stakeholder?.isDeleted;
-
-                return filtroAno && filtroBaixa && filtroClienteExcluido;
-            })
-            .map(item => ({
-                data: item.paymentDate,
-                valor: item.paidValue,
-                tipo: item.tipo,
-                status: 'realizado',
-                categoriaDFC: mapearCategoriaParaDFC(item.category?.name),
-                descricao: item.description,
-                isReconciled: item.isReconciled || false
-            }));
-
-        return NextResponse.json(dadosDFC);
+        // 3. Retornar apenas os dados brutos encontrados para análise
+        return NextResponse.json(lancamentosDoCliente);
 
     } catch (error) {
-        console.error('Erro detalhado na API do DFC:', error);
+        console.error('Erro detalhado no teste de diagnóstico:', error);
         return NextResponse.json({ 
-            error: 'Falha ao buscar dados do DFC do NIBO.', 
+            error: 'Falha no teste de diagnóstico.', 
             details: error.message 
         }, { status: 500 });
     }
