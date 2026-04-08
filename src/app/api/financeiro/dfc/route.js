@@ -26,7 +26,7 @@ async function fetchNiboData(apiKey, endpoint) {
     return response.json();
 }
 
-// --- Função principal da rota (LÓGICA DE FILTRO DE DATA CORRIGIDA) ---
+// --- Função principal da rota (SIMPLIFICADA E CORRIGIDA) ---
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa');
@@ -39,49 +39,43 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        const hoje = new Date().toISOString().slice(0, 10);
-        const inicioAno = `${ano}-01-01`;
-        const fimAno = `${ano}-12-31`;
-
-        // --- 1. Definir os endpoints com a sintaxe de filtro de data correta ---
+        // --- 1. Definir os endpoints para buscar TUDO que foi pago ---
+        // A filtragem por ano será feita no nosso código, pois a API não suporta na URL.
         const endpoints = {
-            realizadoCredit: `/schedules/credit?$filter=isPaid eq true and paymentDate ge ${inicioAno} and paymentDate le ${fimAno}&$expand=stakeholder,category`,
-            realizadoDebit: `/schedules/debit?$filter=isPaid eq true and paymentDate ge ${inicioAno} and paymentDate le ${fimAno}&$expand=stakeholder,category`,
-            projetadoCredit: `/schedules/credit?$filter=isPaid eq false and dueDate ge ${hoje} and dueDate le ${fimAno}&$expand=stakeholder,category`,
-            projetadoDebit: `/schedules/debit?$filter=isPaid eq false and dueDate ge ${hoje} and dueDate le ${fimAno}&$expand=stakeholder,category`,
+            realizadoCredit: `/schedules/credit?$filter=isPaid eq true&$expand=stakeholder,category`,
+            realizadoDebit: `/schedules/debit?$filter=isPaid eq true&$expand=stakeholder,category`,
         };
 
-        // --- 2. Executar todas as chamadas em paralelo ---
+        // --- 2. Executar as chamadas em paralelo ---
         const [
             resRealizadoCredit,
             resRealizadoDebit,
-            resProjetadoCredit,
-            resProjetadoDebit
         ] = await Promise.all([
             fetchNiboData(apiKey, endpoints.realizadoCredit),
             fetchNiboData(apiKey, endpoints.realizadoDebit),
-            fetchNiboData(apiKey, endpoints.projetadoCredit),
-            fetchNiboData(apiKey, endpoints.projetadoDebit)
         ]);
 
-        const todosOsItens = [
-            ...(resRealizadoCredit.items || []).map(item => ({ ...item, status: 'realizado', tipo: 'entrada' })),
-            ...(resRealizadoDebit.items || []).map(item => ({ ...item, status: 'realizado', tipo: 'saida' })),
-            ...(resProjetadoCredit.items || []).map(item => ({ ...item, status: 'projetado', tipo: 'entrada' })),
-            ...(resProjetadoDebit.items || []).map(item => ({ ...item, status: 'projetado', tipo: 'saida' })),
+        const todosOsItensPagos = [
+            ...(resRealizadoCredit.items || []).map(item => ({ ...item, tipo: 'entrada' })),
+            ...(resRealizadoDebit.items || []).map(item => ({ ...item, tipo: 'saida' })),
         ];
 
-        // --- 3. Aplicar filtros e mapear para o formato final ---
-        const dadosDFC = todosOsItens
-            .filter(item => 
-                !item.writeOffDate && 
-                !item.stakeholder?.isDeleted
-            )
+        // --- 3. Aplicar TODOS os filtros no nosso código ---
+        const dadosDFC = todosOsItensPagos
+            .filter(item => {
+                // Filtro de Ano (aqui funciona!)
+                const filtroAno = item.paymentDate && new Date(item.paymentDate).getFullYear() === ano;
+                // Filtros de Validade
+                const filtroBaixa = !item.writeOffDate;
+                const filtroClienteExcluido = !item.stakeholder?.isDeleted;
+
+                return filtroAno && filtroBaixa && filtroClienteExcluido;
+            })
             .map(item => ({
-                data: item.status === 'realizado' ? item.paymentDate : item.dueDate,
-                valor: item.status === 'realizado' ? item.paidValue : item.openValue,
+                data: item.paymentDate,
+                valor: item.paidValue,
                 tipo: item.tipo,
-                status: item.status,
+                status: 'realizado',
                 categoriaDFC: mapearCategoriaParaDFC(item.category?.name),
                 descricao: item.description,
                 isReconciled: item.isReconciled || false
