@@ -26,11 +26,11 @@ async function fetchNiboData(apiKey, endpoint) {
     return response.json();
 }
 
-// --- Função principal da rota (SIMPLIFICADA E CORRIGIDA) ---
+// --- Função principal da rota (CORREÇÃO NO FILTRO DE ANO) ---
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa');
-    const ano = parseInt(searchParams.get('ano'), 10);
+    const ano = searchParams.get('ano'); // Mantém como string para comparação direta
 
     if (!empresa || !ano) {
         return NextResponse.json({ error: 'Os parâmetros "empresa" e "ano" são obrigatórios.' }, { status: 400 });
@@ -39,14 +39,11 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // --- 1. Definir os endpoints para buscar TUDO que foi pago ---
-        // A filtragem por ano será feita no nosso código, pois a API não suporta na URL.
         const endpoints = {
             realizadoCredit: `/schedules/credit?$filter=isPaid eq true&$expand=stakeholder,category`,
             realizadoDebit: `/schedules/debit?$filter=isPaid eq true&$expand=stakeholder,category`,
         };
 
-        // --- 2. Executar as chamadas em paralelo ---
         const [
             resRealizadoCredit,
             resRealizadoDebit,
@@ -60,12 +57,12 @@ export async function GET(request) {
             ...(resRealizadoDebit.items || []).map(item => ({ ...item, tipo: 'saida' })),
         ];
 
-        // --- 3. Aplicar TODOS os filtros no nosso código ---
         const dadosDFC = todosOsItensPagos
             .filter(item => {
-                // Filtro de Ano (aqui funciona!)
-                const filtroAno = item.paymentDate && new Date(item.paymentDate).getFullYear() === ano;
-                // Filtros de Validade
+                // --- CORREÇÃO APLICADA AQUI ---
+                // Compara o ano como string para evitar erros de fuso horário.
+                const filtroAno = item.paymentDate && item.paymentDate.substring(0, 4) === ano;
+                
                 const filtroBaixa = !item.writeOffDate;
                 const filtroClienteExcluido = !item.stakeholder?.isDeleted;
 
