@@ -1,9 +1,7 @@
 // Arquivo: src/app/api/financeiro/dfc/route.js
 import { NextResponse } from 'next/server';
 
-// --- Constantes das APIs ---
-const NIBO_API_V1_URL = 'https://api.nibo.com.br/empresas/v1';
-const NIBO_API_V2_URL = 'https://api.nibo.com.br/v2';
+const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
 // --- Função de Mapeamento de Categorias (sem alterações ) ---
 function mapearCategoriaParaDFC(categoryName) {
@@ -15,13 +13,11 @@ function mapearCategoriaParaDFC(categoryName) {
     return 'Não Classificado';
 }
 
-// --- Funções de Busca Específicas por Versão da API ---
-
-// Função para buscar dados da API v1 (Projetado)
-async function fetchNiboV1(apiKey, endpoint) {
+// --- Função de busca na API v1 (sem alterações) ---
+async function fetchNiboData(apiKey, endpoint) {
     if (!apiKey) throw new Error(`Chave de API do NIBO (v1) não fornecida.`);
     const separator = endpoint.includes('?') ? '&' : '?';
-    const url = `${NIBO_API_V1_URL}${endpoint}${separator}apitoken=${apiKey}`;
+    const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}`;
     const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
     if (!response.ok) {
         const errorBody = await response.text();
@@ -30,23 +26,7 @@ async function fetchNiboV1(apiKey, endpoint) {
     return response.json();
 }
 
-// Função para buscar dados da API v2 (Realizado)
-async function fetchNiboV2(apiKey, endpoint) {
-    if (!apiKey) throw new Error(`Chave de API do NIBO (v2) não fornecida.`);
-    const url = `${NIBO_API_V2_URL}${endpoint}`;
-    const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'access_token': apiKey, 'Content-Type': 'application/json' },
-        cache: 'no-store',
-    });
-    if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`Erro na API v2 do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
-    }
-    return response.json();
-}
-
-// --- Função principal da rota (LÓGICA CORRIGIDA) ---
+// --- Função principal da rota (LÓGICA CORRIGIDA E SEGURA) ---
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa');
@@ -59,37 +39,51 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // --- 1. Busca de Dados "Realizados" (API v2) ---
-        const resultRealizadoBruto = await fetchNiboV2(apiKey, '/accounting/entries');
-        const realizados = (resultRealizadoBruto.items || [])
+        const hoje = new Date().toISOString().slice(0, 10);
+
+        // --- 1. Definir os endpoints para as 4 chamadas necessárias ---
+        const endpoints = {
+            realizadoCredit: `/schedules/credit?$filter=isPaid eq true and year(paymentDate) eq ${ano}&$expand=stakeholder,category`,
+            realizadoDebit: `/schedules/debit?$filter=isPaid eq true and year(paymentDate) eq ${ano}&$expand=stakeholder,category`,
+            projetadoCredit: `/schedules/credit?$filter=isPaid eq false and dueDate ge ${hoje} and year(dueDate) eq ${ano}&$expand=stakeholder,category`,
+            projetadoDebit: `/schedules/debit?$filter=isPaid eq false and dueDate ge ${hoje} and year(dueDate) eq ${ano}&$expand=stakeholder,category`,
+        };
+
+        // --- 2. Executar todas as chamadas em paralelo ---
+        const [
+            resRealizadoCredit,
+            resRealizadoDebit,
+            resProjetadoCredit,
+            resProjetadoDebit
+        ] = await Promise.all([
+            fetchNiboData(apiKey, endpoints.realizadoCredit),
+            fetchNiboData(apiKey, endpoints.realizadoDebit),
+            fetchNiboData(apiKey, endpoints.projetadoCredit),
+            fetchNiboData(apiKey, endpoints.projetadoDebit)
+        ]);
+
+        const todosOsItens = [
+            ...resRealizadoCredit.items.map(item => ({ ...item, status: 'realizado', tipo: 'entrada' })),
+            ...resRealizadoDebit.items.map(item => ({ ...item, status: 'realizado', tipo: 'saida' })),
+            ...resProjetadoCredit.items.map(item => ({ ...item, status: 'projetado', tipo: 'entrada' })),
+            ...resProjetadoDebit.items.map(item => ({ ...item, status: 'projetado', tipo: 'saida' })),
+        ];
+
+        // --- 3. Aplicar filtros e mapear para o formato final ---
+        const dadosDFC = todosOsItens
             .filter(item => 
-                item.isReconciled === true &&
-                item.paymentDate && new Date(item.paymentDate).getFullYear() === ano
+                !item.writeOffDate && // Exclui se tiver data de baixa
+                !item.stakeholder?.isDeleted // Exclui se o cliente/fornecedor foi deletado
             )
             .map(item => ({
-                data: item.paymentDate,
-                valor: item.value,
-                tipo: item.type === 'in' ? 'entrada' : 'saida',
-                status: 'realizado',
+                data: item.status === 'realizado' ? item.paymentDate : item.dueDate,
+                valor: item.status === 'realizado' ? item.paidValue : item.openValue,
+                tipo: item.tipo,
+                status: item.status,
                 categoriaDFC: mapearCategoriaParaDFC(item.category?.name),
                 descricao: item.description,
+                isReconciled: item.isReconciled || false // Captura o status de conciliação, se existir
             }));
-
-        // --- 2. Busca de Dados "Projetados" (API v1) ---
-        const hoje = new Date().toISOString().slice(0, 10);
-        const filtroProjetado = `$filter=isPaid eq false and dueDate ge ${hoje} and year(dueDate) eq ${ano}`;
-        const resultProjetado = await fetchNiboV1(apiKey, `/schedules?${filtroProjetado}`);
-        const projetados = (resultProjetado.items || []).map(item => ({
-            data: item.dueDate,
-            valor: item.openValue,
-            tipo: item.type === 'Credit' ? 'entrada' : 'saida',
-            status: 'projetado',
-            categoriaDFC: mapearCategoriaParaDFC(item.category?.name),
-            descricao: item.description,
-        }));
-
-        // --- 3. Unir e Retornar ---
-        const dadosDFC = [...realizados, ...projetados];
 
         return NextResponse.json(dadosDFC);
 
