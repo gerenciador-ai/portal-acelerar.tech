@@ -13,42 +13,20 @@ function mapearCategoriaParaDFC(categoryName) {
     return 'Não Classificado';
 }
 
-// --- Função de busca na API v1 (MODIFICADA PARA SUPORTAR PAGINAÇÃO) ---
-async function fetchAllNiboData(apiKey, initialEndpoint) {
-    let allItems = [];
-    let endpoint = initialEndpoint;
-    let hasNextPage = true;
-
-    while (hasNextPage) {
-        const separator = endpoint.includes('?') ? '&' : '?';
-        const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}`;
-        
-        const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`Erro na API v1 do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
-        }
-
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-            allItems = allItems.concat(data.items);
-        }
-
-        // Verifica se há uma próxima página na resposta
-        const nextPageLink = data['@odata.nextLink'];
-        if (nextPageLink) {
-            // Extrai o endpoint da URL completa da próxima página
-            endpoint = nextPageLink.substring(NIBO_API_URL.length);
-        } else {
-            hasNextPage = false;
-        }
+// --- Função de busca na API v1 (sem paginação, pois o filtro inicial é suficiente) ---
+async function fetchNiboData(apiKey, endpoint) {
+    if (!apiKey) throw new Error(`Chave de API do NIBO (v1) não fornecida.`);
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}`;
+    const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Erro na API v1 do NIBO (${response.status}) ao acessar ${url}: ${errorBody}`);
     }
-    return allItems;
+    return response.json();
 }
 
-
-// --- Função principal da rota (Usando a nova função com paginação) ---
+// --- Função principal da rota (LÓGICA DE FILTRO CORRIGIDA E SIMPLIFICADA) ---
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const empresa = searchParams.get('empresa');
@@ -60,36 +38,38 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // 1. Definir os endpoints iniciais
+        // 1. Filtro inteligente na URL: busca itens pagos com VENCIMENTO a partir de 2026.
+        // Isso reduz drasticamente o volume de dados, eliminando a necessidade de paginação.
+        const filtroURL = `$filter=isPaid eq true and dueDate ge 2026-01-01`;
+
         const endpoints = {
-            realizadoCredit: `/schedules/credit?$filter=isPaid eq true&$expand=stakeholder,category`,
-            realizadoDebit: `/schedules/debit?$filter=isPaid eq true&$expand=stakeholder,category`,
+            realizadoCredit: `/schedules/credit?${filtroURL}&$expand=stakeholder,category`,
+            realizadoDebit: `/schedules/debit?${filtroURL}&$expand=stakeholder,category`,
         };
 
-        // 2. Executar as buscas com paginação em paralelo
         const [
-            todosCreditosPagos,
-            todosDebitosPagos,
+            resRealizadoCredit,
+            resRealizadoDebit,
         ] = await Promise.all([
-            fetchAllNiboData(apiKey, endpoints.realizadoCredit),
-            fetchAllNiboData(apiKey, endpoints.realizadoDebit),
+            fetchNiboData(apiKey, endpoints.realizadoCredit),
+            fetchNiboData(apiKey, endpoints.realizadoDebit),
         ]);
 
         const todosOsItensPagos = [
-            ...todosCreditosPagos.map(item => ({ ...item, tipo: 'entrada' })),
-            ...todosDebitosPagos.map(item => ({ ...item, tipo: 'saida' })),
+            ...(resRealizadoCredit.items || []).map(item => ({ ...item, tipo: 'entrada' })),
+            ...(resRealizadoDebit.items || []).map(item => ({ ...item, tipo: 'saida' })),
         ];
 
-        // 3. Aplicar os filtros de data e validade no nosso código
-        const dataInicio = new Date('2026-01-01T00:00:00Z');
-
+        // 2. Aplicar os filtros finais de validade e DATA DE PAGAMENTO no nosso código
         const dadosDFC = todosOsItensPagos
             .filter(item => {
-                if (!item.paymentDate) return false;
-                const filtroData = new Date(item.paymentDate) >= dataInicio;
+                // Garante que o item tem uma data de PAGAMENTO e que ela é de 2026 ou posterior
+                if (!item.paymentDate || !item.paymentDate.startsWith('2026')) return false;
+                
                 const filtroBaixa = !item.writeOffDate;
                 const filtroClienteExcluido = !item.stakeholder?.isDeleted;
-                return filtroData && filtroBaixa && filtroClienteExcluido;
+
+                return filtroBaixa && filtroClienteExcluido;
             })
             .map(item => ({
                 data: item.paymentDate,
