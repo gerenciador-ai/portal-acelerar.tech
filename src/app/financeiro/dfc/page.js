@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
-// --- MAPEAMENTO ESTRATÉGICO DAS 210 CATEGORIAS ---
+// --- MAPEAMENTO ESTRATÉGICO DAS 210 CATEGORIAS (BASEADO NO PLANO DE CONTAS 2026) ---
 const CLASSIFICACAO_DFC = {
     // 1. RECEITAS OPERACIONAIS
     "Multas Recebidas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
@@ -229,7 +229,6 @@ const CLASSIFICACAO_DFC = {
     "000000599 Pgtos. Estornos": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 }
 };
 
-// --- Estrutura de Linhas do DFC ---
 const LINHAS_DFC = [
     "RECEITAS OPERACIONAIS",
     "(-) IMPOSTOS SOBRE VENDAS",
@@ -244,7 +243,6 @@ const LINHAS_DFC = [
     "(=) SALDO LÍQUIDO DO PERÍODO"
 ];
 
-// --- Componente de Abas para Empresas ---
 function EmpresaTab({ nome, logo, isActive, onClick }) {
     return (
         <button 
@@ -261,7 +259,6 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
     );
 }
 
-// --- Página Principal do DFC ---
 export default function DFCPage() {
     const [empresaAtiva, setEmpresaAtiva] = useState(null);
     const [dados, setDados] = useState(null);
@@ -296,14 +293,16 @@ export default function DFCPage() {
             matriz[linha] = Array(12).fill(0);
         });
 
-        dados.fluxo.forEach(item => {
+        // Ordenação por data para garantir cronologia
+        const fluxoOrdenado = [...dados.fluxo].sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        fluxoOrdenado.forEach(item => {
             const data = new Date(item.data);
             const mes = data.getMonth();
             const ano = data.getFullYear();
 
             if (ano !== anoAtivo) return;
 
-            // Busca classificação, se não achar cai em Despesas Financeiras (Outros)
             const classificacao = CLASSIFICACAO_DFC[item.categoria] || { grupo: "(-) DESPESAS FINANCEIRAS", sinal: 1 };
             const valor = parseFloat(item.valor) * (classificacao.sinal || 1);
             
@@ -312,7 +311,6 @@ export default function DFCPage() {
             }
         });
 
-        // Cálculos de Totais e Saldos
         for (let m = 0; m < 12; m++) {
             matriz["(=) RECEITA LÍQUIDA"][m] = matriz["RECEITAS OPERACIONAIS"][m] - matriz["(-) IMPOSTOS SOBRE VENDAS"][m];
             
@@ -358,7 +356,7 @@ export default function DFCPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {LINHAS_DFC.map((linha, idx) => {
+                        {LINHAS_DFC.map((linha) => {
                             const isTotal = linha.startsWith('(=)');
                             return (
                                 <tr key={linha} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
@@ -381,24 +379,9 @@ export default function DFCPage() {
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
             <div className="flex items-center justify-between border-b border-white/10">
                 <div className="flex">
-                    <EmpresaTab 
-                        nome="Consolidado" 
-                        logo="logo_acelerar_login.png" 
-                        isActive={empresaAtiva === 'Consolidado'} 
-                        onClick={() => setEmpresaAtiva('Consolidado')} 
-                    />
-                    <EmpresaTab 
-                        nome="VMC Tech" 
-                        logo="logo_vmctech.png" 
-                        isActive={empresaAtiva === 'VMC Tech'} 
-                        onClick={() => setEmpresaAtiva('VMC Tech')} 
-                    />
-                    <EmpresaTab 
-                        nome="Victec" 
-                        logo="logo_victec.png" 
-                        isActive={empresaAtiva === 'Victec'} 
-                        onClick={() => setEmpresaAtiva('Victec')} 
-                    />
+                    <EmpresaTab nome="Consolidado" logo="logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
+                    <EmpresaTab nome="VMC Tech" logo="logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
+                    <EmpresaTab nome="Victec" logo="logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
                 </div>
 
                 {empresaAtiva && (
@@ -407,18 +390,12 @@ export default function DFCPage() {
                             <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
                             <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
                         </div>
-                        <select 
-                            value={anoAtivo} 
-                            onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
-                            className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue"
-                        >
+                        <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
                             <option value={2026}>Ano: 2026</option>
                         </select>
                         {dados?.conciliadoAte && (
                             <div className="bg-yellow-500/10 border border-yellow-500/30 px-4 py-1.5 rounded-lg">
-                                <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">
-                                    Conciliado até {new Date(dados.conciliadoAte).toLocaleDateString('pt-BR')}
-                                </span>
+                                <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">Conciliado até {new Date(dados.conciliadoAte).toLocaleDateString('pt-BR')}</span>
                             </div>
                         )}
                     </div>
@@ -446,9 +423,7 @@ export default function DFCPage() {
                                 Demonstrativo de Fluxo de Caixa - {empresaAtiva}
                             </h3>
                             {renderTabelaMensal()}
-                            <p className="text-[10px] text-white/30 italic uppercase tracking-wider">
-                                * Dados baseados no Plano de Contas 2026. Categorias não mapeadas são alocadas automaticamente em Despesas Financeiras.
-                            </p>
+                            <p className="text-[10px] text-white/30 italic uppercase tracking-wider">* Dados consolidados por data de pagamento (realizado) e vencimento (previsto).</p>
                         </div>
                     )}
                 </div>
