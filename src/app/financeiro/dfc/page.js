@@ -3,23 +3,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
-// --- MAPEAMENTO ESTRATÉGICO DAS 210 CATEGORIAS (BASEADO NO PLANO DE CONTAS 2026) ---
+// --- MAPEAMENTO ESTRATÉGICO DAS 210 CATEGORIAS ---
 const CLASSIFICACAO_DFC = {
     // 1. RECEITAS OPERACIONAIS
+    "Multas Recebidas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "Juros Recebidos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "Outras receitas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "311014001 Receita de Serviços - Mercado Interno": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "311014002 Rec de serviços - Adesão/Implantação": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "311014004 Receita de Serviços - Licenciamento (VMC Tech)": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "311014005 Receita de Serviços - Licenciamento (Victec)": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "311014006 Receita de Serviços - Outros": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "311014011 Multas Recebidas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "311014012 Juros Recebidos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
-    "000000599 Rec. Estornos": { grupo: "RECEITAS OPERACIONAIS", sinal: -1 }, // Dedução
-    "Descontos Concedidos": { grupo: "RECEITAS OPERACIONAIS", sinal: -1 }, // Dedução
-    "312044351 Descontos concedidos": { grupo: "RECEITAS OPERACIONAIS", sinal: -1 }, // Dedução
-    "Outras receitas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "000000599 Rec. Estornos": { grupo: "RECEITAS OPERACIONAIS", sinal: -1 },
+    "351014901 Lucros e Dividendos de Participações": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "Descontos Recebidos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "511028031 Ganhos com Equivalência Patrimonial": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "911019999 Resultado do Exercício": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "ISS Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "IRPJ Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "CSLL Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "INSS Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "PIS Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "COFINS Retido sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
+    "Outras Retenções sobre Pagamentos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
 
     // 2. (-) IMPOSTOS SOBRE VENDAS
     "ISS Retido sobre a Receita": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: 1 },
@@ -42,13 +45,6 @@ const CLASSIFICACAO_DFC = {
     "Pagamento de PIS Retido": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: 1 },
     "Pagamento de Cofins Retido": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: 1 },
     "Pagamento de Outras retenções": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: 1 },
-    "ISS Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 }, // Dedução
-    "IRPJ Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
-    "CSLL Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
-    "INSS Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
-    "PIS Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
-    "COFINS Retido sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
-    "Outras Retenções sobre Pagamentos": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: -1 },
     "415017011 IRRF Rendimento Financeiros": { grupo: "IMPOSTOS SOBRE VENDAS", sinal: 1 },
 
     // 4. (-) CUSTOS OPERACIONAIS (TIME 32)
@@ -99,9 +95,8 @@ const CLASSIFICACAO_DFC = {
     "411025102 Refeição (VR)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
     "411025103 Transporte (VT)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
     "411025104 Combustivel (VC)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
-    "411025105 Seguro Saúde - Plano": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 }, // PAGAMENTO (SAÍDA)
-    "411025105 Seguro Saúde (Plano)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: -1 }, // REEMBOLSO (ENTRADA)
-    "411025105 Seguro Saúde - Plano (Entrada)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: -1 }, // DEDUÇÃO
+    "411025105 Seguro Saúde - Plano": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
+    "411025105 Seguro Saúde (Plano)": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: -1 },
     "411025106 Seguro Odontológico": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
     "411025107 Cursos e Treinamentos": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
     "411025108 Previdência Privada": { grupo: "DESPESAS ADMINISTRATIVAS (TIME 411/412)", sinal: 1 },
@@ -201,15 +196,15 @@ const CLASSIFICACAO_DFC = {
 
     // 8. (+/-) FLUXO DE INVESTIMENTO (FCI)
     "412015331 Bens Natureza Permanente": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: 1 },
-    "511018001 Ganho na Alienação de Bens": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: -1 }, // ENTRADA NO FCI
+    "511018001 Ganho na Alienação de Bens": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: -1 },
     "510003100 Sittax - Licença de Uso": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: 1 },
     "510003103 Fusões e aquisições (SSX)": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: 1 },
     "111030153 Tì. Cap. Santander": { grupo: "FLUXO DE INVESTIMENTO (FCI)", sinal: 1 },
 
     // 9. (+/-) FLUXO DE FINANCIAMENTO (FCF)
     "215012941 Obrig. com Pessoas Ligadas (GRT)": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: 1 },
-    "351014901 Lucros e Dividendos de Participações": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 }, // ENTRADA
-    "211133011 Empréstimo Banco Itaú (Entrada)": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 }, // ENTRADA
+    "351014901 Lucros e Dividendos de Participações": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 },
+    "211133011 Empréstimo Banco Itaú (Entrada)": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 },
     "510003101 Dividendos Pagos": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: 1 },
     "510003101 Dividendos Devolvidos": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 },
     "215012942 Obrig. com Pessoas Ligadas-Lucas Vianna": { grupo: "FLUXO DE FINANCIAMENTO (FCF)", sinal: -1 },
@@ -227,10 +222,11 @@ const CLASSIFICACAO_DFC = {
     "415027109 IOF": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 },
     "415027110 Variação Monetária Passiva": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 },
     "Custo meio de pagamento": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 },
-    "415017001 Receita Financeira": { grupo: "DESPESAS FINANCEIRAS", sinal: -1 }, // ENTRADA (DEDUÇÃO)
+    "415017001 Receita Financeira": { grupo: "DESPESAS FINANCEIRAS", sinal: -1 },
     "415017002 Descontos Obtidos": { grupo: "DESPESAS FINANCEIRAS", sinal: -1 },
     "Multas Pagas": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 },
-    "Categoria indefinida": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 }
+    "Categoria indefinida": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 },
+    "000000599 Pgtos. Estornos": { grupo: "DESPESAS FINANCEIRAS", sinal: 1 }
 };
 
 // --- Estrutura de Linhas do DFC ---
@@ -259,7 +255,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
                 : 'border-transparent text-white/40 hover:text-white/70 hover:bg-white/5'
             }`}
         >
-            {logo && <Image src={`/images/${logo}`} alt={nome} width={24} height={24} className={isActive ? 'opacity-100' : 'opacity-40'} />}
+            {logo && <Image src={`/${logo}`} alt={nome} width={24} height={24} className={isActive ? 'opacity-100' : 'opacity-40'} />}
             <span className="text-sm font-medium uppercase tracking-wider">{nome}</span>
         </button>
     );
@@ -307,9 +303,11 @@ export default function DFCPage() {
 
             if (ano !== anoAtivo) return;
 
-            const classificacao = CLASSIFICACAO_DFC[item.categoria];
-            if (classificacao) {
-                const valor = parseFloat(item.valor) * (classificacao.sinal || 1);
+            // Busca classificação, se não achar cai em Despesas Financeiras (Outros)
+            const classificacao = CLASSIFICACAO_DFC[item.categoria] || { grupo: "(-) DESPESAS FINANCEIRAS", sinal: 1 };
+            const valor = parseFloat(item.valor) * (classificacao.sinal || 1);
+            
+            if (matriz[classificacao.grupo]) {
                 matriz[classificacao.grupo][mes] += valor;
             }
         });
@@ -381,7 +379,6 @@ export default function DFCPage() {
 
     return (
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
-            {/* Barra de Abas das Empresas */}
             <div className="flex items-center justify-between border-b border-white/10">
                 <div className="flex">
                     <EmpresaTab 
@@ -404,7 +401,6 @@ export default function DFCPage() {
                     />
                 </div>
 
-                {/* Filtros Globais */}
                 {empresaAtiva && (
                     <div className="flex items-center gap-4">
                         <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
@@ -429,7 +425,6 @@ export default function DFCPage() {
                 )}
             </div>
 
-            {/* Área de Conteúdo do DFC */}
             {!empresaAtiva ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
                     <div className="w-16 h-16 border-2 border-white/5 rounded-full flex items-center justify-center">
@@ -452,7 +447,7 @@ export default function DFCPage() {
                             </h3>
                             {renderTabelaMensal()}
                             <p className="text-[10px] text-white/30 italic uppercase tracking-wider">
-                                * Valores positivos em custos/despesas indicam saídas líquidas. Valores negativos indicam deduções ou reembolsos.
+                                * Dados baseados no Plano de Contas 2026. Categorias não mapeadas são alocadas automaticamente em Despesas Financeiras.
                             </p>
                         </div>
                     )}
