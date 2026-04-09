@@ -6,6 +6,7 @@ const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 async function fetchNiboData(apiKey, endpoint ) {
     if (!apiKey) throw new Error(`Chave de API do NIBO não fornecida.`);
     const separator = endpoint.includes('?') ? '&' : '?';
+    // Buscamos sem filtros de URL para garantir que nada seja barrado pelo servidor do Nibo
     const url = `${NIBO_API_URL}${endpoint}${separator}apitoken=${apiKey}&$expand=stakeholder,category`;
     
     const response = await fetch(url, { 
@@ -32,7 +33,6 @@ export async function GET(request) {
     const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
     try {
-        // FOCO TOTAL NO REALIZADO (Pagos e Recebidos)
         const [resCredit, resDebit] = await Promise.all([
             fetchNiboData(apiKey, '/schedules/credit'),
             fetchNiboData(apiKey, '/schedules/debit')
@@ -43,50 +43,35 @@ export async function GET(request) {
             ...(resDebit.items || []).map(i => ({ ...i, tipo: 'saida' }))
         ];
 
-        // LOG DE AUDITORIA (Visível no console da Vercel)
-        console.log(`--- AUDITORIA DFC: ${empresa} ---`);
-        
         const dadosProcessados = todosOsItens
             .filter(item => {
-                // 1. Apenas 2026
-                const dataPagamento = item.paymentDate;
-                if (!dataPagamento || dataPagamento < '2026-01-01') return false;
-
-                // 2. FOCO NO REALIZADO (Apenas o que já foi pago/recebido)
-                if (!item.isPaid) return false;
-
-                // 3. Filtros de Integridade
-                if (item.stakeholder?.isDeleted) return false;
-                if (item.writeOffDate) return false;
-
-                return true;
+                // USAMOS VENCIMENTO OU PAGAMENTO PARA NÃO PERDER NADA
+                const dataRef = item.paymentDate || item.dueDate;
+                // Filtramos apenas para 2026
+                return dataRef && dataRef >= '2026-01-01';
             })
             .map(item => {
-                // Logamos cada categoria única encontrada para conferência
-                console.log(`[CATEGORIA ENCONTRADA]: "${item.category?.name}" | VALOR: ${item.value}`);
-
                 return {
-                    data: item.paymentDate.split('T')[0],
+                    data: (item.paymentDate || item.dueDate).split('T')[0],
                     valor: item.paidValue || item.value,
                     tipo: item.tipo,
-                    status: 'realizado',
+                    status: item.isPaid ? 'realizado' : 'previsto',
                     categoria: item.category?.name || 'Categoria indefinida',
                     descricao: item.description || '',
                     clienteFornecedor: item.stakeholder?.name || 'N/A',
-                    conciliado: item.isReconciled || false
+                    isPaid: item.isPaid
                 };
             });
 
-        dadosProcessados.sort((a, b) => a.data.localeCompare(b.data));
-
         return NextResponse.json({
             empresa: empresa,
-            totalItens: dadosProcessados.length,
-            fluxo: dadosProcessados
+            totalItensNoNibo: todosOsItens.length,
+            totalItensFiltrados2026: dadosProcessados.length,
+            amostra: dadosProcessados.slice(0, 10) // Enviamos uma amostra para conferência
         });
 
     } catch (error) {
-        console.error('Erro na API de Diagnóstico:', error);
-        return NextResponse.json({ error: 'Falha no diagnóstico.', details: error.message }, { status: 500 });
+        console.error('Erro na API de Auditoria Profunda:', error);
+        return NextResponse.json({ error: 'Falha na auditoria profunda.', details: error.message }, { status: 500 });
     }
 }
