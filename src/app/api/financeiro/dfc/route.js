@@ -47,10 +47,18 @@ export async function GET(request) {
     const debitos = resDebit.items || [];
 
     const fluxoProcessado = [...creditos, ...debitos].map(item => {
-      // PROTEÇÃO CONTRA CATEGORIA VAZIA
-      const categoriaOriginal = String(item.category || "").trim();
+      // AJUSTE CRUCIAL: O Nibo às vezes manda a categoria como objeto { name: "..." }
+      let categoriaOriginal = "";
+      if (typeof item.category === 'object' && item.category !== null) {
+        categoriaOriginal = String(item.category.name || "");
+      } else {
+        categoriaOriginal = String(item.category || "");
+      }
+      
+      categoriaOriginal = categoriaOriginal.trim();
       const codigo9 = categoriaOriginal.length >= 9 ? categoriaOriginal.substring(0, 9) : "";
       
+      // Busca no Plano de Contas do Supabase
       const mapeamento = planoContas.find(p => 
         (p.codigo_9_digitos && p.codigo_9_digitos === codigo9) || 
         (p.categoria_nibo && p.categoria_nibo === categoriaOriginal)
