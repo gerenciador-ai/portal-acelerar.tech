@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
-// --- LINHAS OFICIAIS DO DFC (CONFORME SEU SUPABASE) ---
+// --- LINHAS OFICIAIS DO DFC (CONFORME SEU SUPABASE E ORDEM) ---
 const LINHAS_DFC = [
     "RECEITAS OPERACIONAIS",
     "(-) IMPOSTOS SOBRE VENDAS",
@@ -15,7 +15,7 @@ const LINHAS_DFC = [
     "(+/-) FLUXO DE INVESTIMENTO (FCI)",
     "(+/-) FLUXO DE FINANCIAMENTO (FCF)",
     "(-) DESPESAS FINANCEIRAS",
-    "OUTROS / NÃO CLASSIFICADOS",
+    "OUTROS / NAO CLASSIFICADOS",
     "(=) SALDO LÍQUIDO DO PERÍODO"
 ];
 
@@ -70,24 +70,23 @@ export default function DFCPage() {
         });
 
         dados.fluxo.forEach(item => {
-            const data = new Date(item.data + 'T12:00:00');
-            const mes = data.getMonth();
-            const ano = data.getFullYear();
+            if (!item.data) return;
+            const data = new Date(item.data);
+            const mes = data.getUTCMonth();
+            const ano = data.getUTCFullYear();
 
             if (ano !== anoAtivo) return;
 
-            // Usa o grupo_dfc que veio classificado da API (Supabase)
             const grupo = item.grupo_dfc;
             const valor = parseFloat(item.valor);
             
             if (matriz[grupo]) {
                 matriz[grupo][mes] += valor;
             } else {
-                matriz["OUTROS / NÃO CLASSIFICADOS"][mes] += valor;
+                matriz["OUTROS / NAO CLASSIFICADOS"][mes] += valor;
             }
         });
 
-        // Cálculos de Totais e Subtotais
         for (let m = 0; m < 12; m++) {
             matriz["(=) RECEITA LÍQUIDA"][m] = matriz["RECEITAS OPERACIONAIS"][m] + matriz["(-) IMPOSTOS SOBRE VENDAS"][m];
             
@@ -102,7 +101,7 @@ export default function DFCPage() {
                 matriz["(+/-) FLUXO DE INVESTIMENTO (FCI)"][m] + 
                 matriz["(+/-) FLUXO DE FINANCIAMENTO (FCF)"][m] + 
                 matriz["(-) DESPESAS FINANCEIRAS"][m] +
-                matriz["OUTROS / NÃO CLASSIFICADOS"][m];
+                matriz["OUTROS / NAO CLASSIFICADOS"][m];
         }
 
         return matriz;
