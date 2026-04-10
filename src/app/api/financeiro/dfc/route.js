@@ -1,79 +1,85 @@
-// Arquivo: src/app/api/financeiro/dfc/route.js
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Inicializa o cliente Supabase com as variáveis de ambiente
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
-// --- Função para buscar TODOS os dados (com paginação ) ---
-async function fetchAllNiboData(apiKey, endpoint) {
-    let allItems = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-        const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}&$expand=stakeholder,category&$page=${page}`;
-        const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
-        
-        if (!response.ok) throw new Error(`Erro na API NIBO: ${response.status}`);
-        
-        const data = await response.json();
-        const items = data.items || [];
-        
-        allItems = [...allItems, ...items];
-        
-        // Se vieram menos de 50 itens (padrão do Nibo), chegamos ao fim
-        if (items.length < 50) {
-            hasMore = false;
-        } else {
-            page++;
-        }
-        
-        // Trava de segurança para não entrar em loop infinito
-        if (page > 20) hasMore = false; 
-    }
-    return allItems;
+async function fetchNiboData(apiKey, endpoint ) {
+  if (!apiKey) throw new Error(`Chave de API do NIBO não fornecida.`);
+  const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}`;
+  const response = await fetch(url, { 
+    method: 'GET', 
+    headers: { 'Content-Type': 'application/json' }, 
+    cache: 'no-store' 
+  });
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Erro na API do NIBO (${response.status}): ${errorBody}`);
+  }
+  return response.json();
 }
 
 export async function GET(request) {
-    const { searchParams } = new URL(request.url);
-    const empresa = searchParams.get('empresa');
-    if (!empresa) return NextResponse.json({ error: 'Empresa obrigatória' }, { status: 400 });
+  const { searchParams } = new URL(request.url);
+  const empresa = searchParams.get('empresa');
+  
+  if (!empresa) {
+    return NextResponse.json({ error: 'O parâmetro "empresa" é obrigatório.' }, { status: 400 });
+  }
 
-    const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
+  // Define a chave da API do Nibo com base na empresa
+  const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
-    try {
-        // Busca exaustiva de Créditos e Débitos
-        const [resCredit, resDebit] = await Promise.all([
-            fetchAllNiboData(apiKey, '/schedules/credit'),
-            fetchAllNiboData(apiKey, '/schedules/debit')
-        ]);
+  try {
+    // 1. Busca os lançamentos do Nibo (Créditos e Débitos) e o Plano de Contas do Supabase em paralelo
+    const [resCredit, resDebit, { data: planoContas, error: errorSupabase }] = await Promise.all([
+      fetchNiboData(apiKey, '/schedules/credit'),
+      fetchNiboData(apiKey, '/schedules/debit'),
+      supabase.from('plano_contas_dfc').select('codigo_9_digitos, categoria_nibo, grupo_dfc')
+    ]);
 
-        const todosOsItens = [
-            ...resCredit.map(i => ({ ...i, tipo: 'entrada' })),
-            ...resDebit.map(i => ({ ...i, tipo: 'saida' }))
-        ];
+    if (errorSupabase) throw new Error(`Erro ao buscar Plano de Contas no Supabase: ${errorSupabase.message}`);
 
-        const dadosProcessados = todosOsItens
-            .filter(item => {
-                const dataRef = item.paymentDate || item.dueDate;
-                // Filtro rigoroso: Apenas 2026 e que NÃO sejam deletados ou baixados
-                return dataRef && dataRef >= '2026-01-01' && !item.stakeholder?.isDeleted && !item.writeOffDate;
-            })
-            .map(item => ({
-                data: (item.paymentDate || item.dueDate).split('T')[0],
-                valor: item.paidValue || item.value,
-                tipo: item.tipo,
-                status: item.isPaid ? 'realizado' : 'previsto',
-                categoria: item.category?.name || 'Categoria indefinida',
-                isPaid: item.isPaid
-            }));
+    const creditos = resCredit.items || [];
+    const debitos = resDebit.items || [];
 
-        return NextResponse.json({
-            empresa,
-            totalCapturado: dadosProcessados.length,
-            fluxo: dadosProcessados
-        });
+    // 2. Processa e Classifica os lançamentos
+    const fluxoProcessado = [...creditos, ...debitos].map(item => {
+      const categoriaOriginal = item.category || "";
+      const codigo9 = categoriaOriginal.substring(0, 9);
+      
+      // Tenta encontrar por código de 9 dígitos primeiro, depois por nome exato
+      const mapeamento = planoContas.find(p => 
+        (p.codigo_9_digitos && p.codigo_9_digitos === codigo9) || 
+        (p.categoria_nibo && p.categoria_nibo === categoriaOriginal)
+      );
 
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      return {
+        data: item.dueDate || item.paymentDate,
+        valor: parseFloat(item.value), // Mantém o sinal original do Nibo (+ ou -)
+        categoria: categoriaOriginal,
+        grupo_dfc: mapeamento ? mapeamento.grupo_dfc : "OUTROS / NÃO CLASSIFICADOS",
+        isPaid: !!item.paymentDate,
+        tipo: item.type // 'credit' ou 'debit' do Nibo
+      };
+    });
+
+    return NextResponse.json({
+      empresa,
+      totalLancamentos: fluxoProcessado.length,
+      fluxo: fluxoProcessado
+    });
+
+  } catch (error) {
+    console.error('Erro na API DFC:', error);
+    return NextResponse.json({ 
+      error: 'Falha ao processar DFC.', 
+      details: error.message 
+    }, { status: 500 });
+  }
 }
