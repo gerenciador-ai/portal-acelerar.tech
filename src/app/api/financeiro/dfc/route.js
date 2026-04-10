@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Usando os nomes EXATOS que você confirmou na Vercel
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Inicializa o cliente Supabase (com verificação para não quebrar o build)
 const supabase = (supabaseUrl && supabaseServiceKey) 
   ? createClient(supabaseUrl, supabaseServiceKey) 
   : null;
@@ -31,13 +29,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const empresa = searchParams.get('empresa');
   
-  if (!empresa) {
-    return NextResponse.json({ error: 'O parâmetro "empresa" é obrigatório.' }, { status: 400 });
-  }
-
-  if (!supabase) {
-    return NextResponse.json({ error: 'Configuração do Supabase ausente no servidor.' }, { status: 500 });
-  }
+  if (!empresa) return NextResponse.json({ error: 'O parâmetro "empresa" é obrigatório.' }, { status: 400 });
+  if (!supabase) return NextResponse.json({ error: 'Configuração do Supabase ausente.' }, { status: 500 });
 
   const apiKey = empresa === 'Victec' ? process.env.NIBO_API_KEY_VICTEC : process.env.NIBO_API_KEY_VMCTECH;
 
@@ -54,8 +47,9 @@ export async function GET(request) {
     const debitos = resDebit.items || [];
 
     const fluxoProcessado = [...creditos, ...debitos].map(item => {
-      const categoriaOriginal = item.category || "";
-      const codigo9 = categoriaOriginal.substring(0, 9);
+      // PROTEÇÃO CONTRA CATEGORIA VAZIA
+      const categoriaOriginal = String(item.category || "").trim();
+      const codigo9 = categoriaOriginal.length >= 9 ? categoriaOriginal.substring(0, 9) : "";
       
       const mapeamento = planoContas.find(p => 
         (p.codigo_9_digitos && p.codigo_9_digitos === codigo9) || 
