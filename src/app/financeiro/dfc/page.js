@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
-// --- MAPEAMENTO VALIDADO PELO USUÁRIO (NÃO ALTERAR) ---
+// --- DICIONÁRIO EXATO DAS 210 CATEGORIAS VALIDADO PELO USUÁRIO ---
 const MAPA_CATEGORIAS_DFC = {
     "Multas Recebidas": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
     "Juros Recebidos": { grupo: "RECEITAS OPERACIONAIS", sinal: 1 },
@@ -240,7 +240,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
                 : 'border-transparent text-white/40 hover:text-white/70 hover:bg-white/5'
             }`}
         >
-            {logo && <Image src={logo} alt={nome} width={24} height={24} className={isActive ? 'opacity-100' : 'opacity-40'} />}
+            {logo && <Image src={`/${logo}`} alt={nome} width={24} height={24} className={isActive ? 'opacity-100' : 'opacity-40'} />}
             <span className="text-sm font-medium uppercase tracking-wider">{nome}</span>
         </button>
     );
@@ -280,13 +280,17 @@ export default function DFCPage() {
             matriz[linha] = Array(12).fill(0);
         });
 
-        dados.fluxo.forEach(item => {
-            const data = new Date(item.data + 'T12:00:00');
+        // Ordenação por data para garantir cronologia
+        const fluxoOrdenado = [...dados.fluxo].sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        fluxoOrdenado.forEach(item => {
+            const data = new Date(item.data + 'T12:00:00'); // Força meio-dia para evitar erro de fuso
             const mes = data.getMonth();
             const ano = data.getFullYear();
 
             if (ano !== anoAtivo) return;
 
+            // BUSCA EXATA PELO NOME DA CATEGORIA QUE VOCÊ PASSOU
             const classificacao = MAPA_CATEGORIAS_DFC[item.categoria] || { grupo: "(-) DESPESAS FINANCEIRAS", sinal: 1 };
             const valor = parseFloat(item.valor) * (classificacao.sinal || 1);
             
@@ -298,8 +302,18 @@ export default function DFCPage() {
         // Cálculos de Totais
         for (let m = 0; m < 12; m++) {
             matriz["(=) RECEITA LÍQUIDA"][m] = matriz["RECEITAS OPERACIONAIS"][m] - matriz["(-) IMPOSTOS SOBRE VENDAS"][m];
-            matriz["(=) FLUXO OPERACIONAL (FCO)"][m] = matriz["(=) RECEITA LÍQUIDA"][m] - matriz["(-) CUSTOS OPERACIONAIS (TIME 32)"][m] - matriz["(-) DESPESAS ADMINISTRATIVAS (TIME 411/412)"][m] - matriz["(-) DESPESAS COMERCIAIS (TIME 413)"][m];
-            matriz["(=) SALDO LÍQUIDO DO PERÍODO"][m] = matriz["(=) FLUXO OPERACIONAL (FCO)"][m] - matriz["(+/-) FLUXO DE INVESTIMENTO (FCI)"][m] - matriz["(+/-) FLUXO DE FINANCIAMENTO (FCF)"][m] - matriz["(-) DESPESAS FINANCEIRAS"][m];
+            
+            matriz["(=) FLUXO OPERACIONAL (FCO)"][m] = 
+                matriz["(=) RECEITA LÍQUIDA"][m] - 
+                matriz["(-) CUSTOS OPERACIONAIS (TIME 32)"][m] - 
+                matriz["(-) DESPESAS ADMINISTRATIVAS (TIME 411/412)"][m] - 
+                matriz["(-) DESPESAS COMERCIAIS (TIME 413)"][m];
+
+            matriz["(=) SALDO LÍQUIDO DO PERÍODO"][m] = 
+                matriz["(=) FLUXO OPERACIONAL (FCO)"][m] - 
+                matriz["(+/-) FLUXO DE INVESTIMENTO (FCI)"][m] - 
+                matriz["(+/-) FLUXO DE FINANCIAMENTO (FCF)"][m] - 
+                matriz["(-) DESPESAS FINANCEIRAS"][m];
         }
 
         return matriz;
@@ -316,15 +330,18 @@ export default function DFCPage() {
     const renderTabelaMensal = () => {
         const matriz = processarDFC;
         if (!matriz) return null;
+
         const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
         return (
             <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
                 <table className="w-full text-left border-collapse">
                     <thead>
-                        <tr className="bg-white/5 text-[10px] text-white/50 uppercase font-bold tracking-widest">
-                            <th className="p-4 border-b border-white/10">Categoria</th>
-                            {meses.map(m => <th key={m} className="p-4 border-b border-white/10 text-right">{m}</th>)}
+                        <tr className="bg-white/5">
+                            <th className="p-4 text-xs font-semibold text-white/50 uppercase border-b border-white/10">Categoria</th>
+                            {meses.map(m => (
+                                <th key={m} className="p-4 text-xs font-semibold text-white/50 uppercase border-b border-white/10 text-right">{m}</th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody>
@@ -351,9 +368,9 @@ export default function DFCPage() {
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
             <div className="flex items-center justify-between border-b border-white/10">
                 <div className="flex">
-                    <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
-                    <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
-                    <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
+                    <EmpresaTab nome="Consolidado" logo="logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
+                    <EmpresaTab nome="VMC Tech" logo="logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
+                    <EmpresaTab nome="Victec" logo="logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
                 </div>
 
                 {empresaAtiva && (
@@ -365,12 +382,20 @@ export default function DFCPage() {
                         <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
                             <option value={2026}>Ano: 2026</option>
                         </select>
+                        {dados?.conciliadoAte && (
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 px-4 py-1.5 rounded-lg">
+                                <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">Conciliado até {new Date(dados.conciliadoAte + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {!empresaAtiva ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
+                    <div className="w-16 h-16 border-2 border-white/5 rounded-full flex items-center justify-center">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    </div>
                     <p className="text-sm font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
                 </div>
             ) : (
@@ -387,6 +412,7 @@ export default function DFCPage() {
                                 Demonstrativo de Fluxo de Caixa - {empresaAtiva}
                             </h3>
                             {renderTabelaMensal()}
+                            <p className="text-[10px] text-white/30 italic uppercase tracking-wider">* Dados consolidados por correspondência exata das categorias do Nibo com o Plano de Contas 2026.</p>
                         </div>
                     )}
                 </div>
