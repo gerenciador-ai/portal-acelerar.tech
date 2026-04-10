@@ -12,8 +12,7 @@ const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
 async function fetchNiboData(apiKey, endpoint ) {
   if (!apiKey) throw new Error(`Chave de API do NIBO não fornecida.`);
-  // AJUSTE: Pedindo o período completo de 2026 para o Nibo
-  const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}&startdate=2026-01-01&enddate=2026-12-31`;
+  const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}`;
   const response = await fetch(url, { 
     method: 'GET', 
     headers: { 'Content-Type': 'application/json' }, 
@@ -47,36 +46,32 @@ export async function GET(request) {
     const creditos = resCredit.items || [];
     const debitos = resDebit.items || [];
 
-    const fluxoProcessado = [...creditos, ...debitos]
-      .filter(item => !!item.paymentDate) // REGIME DE CAIXA: Só o que foi pago/recebido
-      .map(item => {
-        let categoriaOriginal = "";
-        if (typeof item.category === 'object' && item.category !== null) {
-          categoriaOriginal = String(item.category.name || "");
-        } else {
-          categoriaOriginal = String(item.category || "");
-        }
-        
-        const catLimpa = categoriaOriginal.trim();
-        const catLower = catLimpa.toLowerCase();
-        
-        const matchCodigo = catLimpa.match(/\d{9}/);
-        const codigo9 = matchCodigo ? matchCodigo[0] : "";
-        
-        const mapeamento = planoContas.find(p => {
-          const pCodigo = p.codigo_9_digitos ? String(p.codigo_9_digitos).trim() : "";
-          const pNome = p.categoria_nibo ? String(p.categoria_nibo).trim().toLowerCase() : "";
-          return (pCodigo && pCodigo === codigo9) || (pNome && pNome === catLower);
-        });
+    const fluxoProcessado = [...creditos, ...debitos].map(item => {
+      // AJUSTE CRUCIAL: O Nibo às vezes manda a categoria como objeto { name: "..." }
+      let categoriaOriginal = "";
+      if (typeof item.category === 'object' && item.category !== null) {
+        categoriaOriginal = String(item.category.name || "");
+      } else {
+        categoriaOriginal = String(item.category || "");
+      }
+      
+      categoriaOriginal = categoriaOriginal.trim();
+      const codigo9 = categoriaOriginal.length >= 9 ? categoriaOriginal.substring(0, 9) : "";
+      
+      // Busca no Plano de Contas do Supabase
+      const mapeamento = planoContas.find(p => 
+        (p.codigo_9_digitos && p.codigo_9_digitos === codigo9) || 
+        (p.categoria_nibo && p.categoria_nibo === categoriaOriginal)
+      );
 
-        return {
-          data: item.paymentDate,
-          valor: parseFloat(item.value),
-          categoria: catLimpa,
-          grupo_dfc: mapeamento ? mapeamento.grupo_dfc : "OUTROS / NAO CLASSIFICADOS",
-          isPaid: true
-        };
-      });
+      return {
+        data: item.dueDate || item.paymentDate,
+        valor: parseFloat(item.value),
+        categoria: categoriaOriginal,
+        grupo_dfc: mapeamento ? mapeamento.grupo_dfc : "OUTROS / NÃO CLASSIFICADOS",
+        isPaid: !!item.paymentDate
+      };
+    });
 
     return NextResponse.json({ empresa, fluxo: fluxoProcessado });
 
