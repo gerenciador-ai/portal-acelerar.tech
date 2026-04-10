@@ -1,9 +1,7 @@
-// Arquivo: src/app/financeiro/dfc/page.js
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
-// --- LINHAS OFICIAIS DO DFC (CONFORME SEU SUPABASE E ORDEM) ---
 const LINHAS_DFC = [
     "RECEITAS OPERACIONAIS",
     "(-) IMPOSTOS SOBRE VENDAS",
@@ -89,30 +87,15 @@ export default function DFCPage() {
 
         for (let m = 0; m < 12; m++) {
             matriz["(=) RECEITA LÍQUIDA"][m] = matriz["RECEITAS OPERACIONAIS"][m] + matriz["(-) IMPOSTOS SOBRE VENDAS"][m];
-            
-            matriz["(=) FLUXO OPERACIONAL (FCO)"][m] = 
-                matriz["(=) RECEITA LÍQUIDA"][m] + 
-                matriz["(-) CUSTOS OPERACIONAIS"][m] + 
-                matriz["(-) DESPESAS ADMINISTRATIVAS"][m] + 
-                matriz["(-) DESPESAS COMERCIAIS"][m];
-            
-            matriz["(=) SALDO LÍQUIDO DO PERÍODO"][m] = 
-                matriz["(=) FLUXO OPERACIONAL (FCO)"][m] + 
-                matriz["(+/-) FLUXO DE INVESTIMENTO (FCI)"][m] + 
-                matriz["(+/-) FLUXO DE FINANCIAMENTO (FCF)"][m] + 
-                matriz["(-) DESPESAS FINANCEIRAS"][m] +
-                matriz["OUTROS / NAO CLASSIFICADOS"][m];
+            matriz["(=) FLUXO OPERACIONAL (FCO)"][m] = matriz["(=) RECEITA LÍQUIDA"][m] + matriz["(-) CUSTOS OPERACIONAIS"][m] + matriz["(-) DESPESAS ADMINISTRATIVAS"][m] + matriz["(-) DESPESAS COMERCIAIS"][m];
+            matriz["(=) SALDO LÍQUIDO DO PERÍODO"][m] = matriz["(=) FLUXO OPERACIONAL (FCO)"][m] + matriz["(+/-) FLUXO DE INVESTIMENTO (FCI)"][m] + matriz["(+/-) FLUXO DE FINANCIAMENTO (FCF)"][m] + matriz["(-) DESPESAS FINANCEIRAS"][m] + matriz["OUTROS / NAO CLASSIFICADOS"][m];
         }
 
         return matriz;
     }, [dados, anoAtivo]);
 
     const formatarMoeda = (valor) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-            minimumFractionDigits: 2
-        }).format(valor);
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
     };
 
     const renderTabelaMensal = () => {
@@ -157,7 +140,6 @@ export default function DFCPage() {
                     <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
                     <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
                 </div>
-
                 {empresaAtiva && (
                     <div className="flex items-center gap-4">
                         <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
@@ -170,7 +152,6 @@ export default function DFCPage() {
                     </div>
                 )}
             </div>
-
             {!empresaAtiva ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
                     <p className="text-sm font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
