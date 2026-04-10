@@ -12,7 +12,8 @@ const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
 
 async function fetchNiboData(apiKey, endpoint ) {
   if (!apiKey) throw new Error(`Chave de API do NIBO não fornecida.`);
-  const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}`;
+  // AJUSTE: Pedindo o período completo de 2026 para o Nibo
+  const url = `${NIBO_API_URL}${endpoint}?apitoken=${apiKey}&startdate=2026-01-01&enddate=2026-12-31`;
   const response = await fetch(url, { 
     method: 'GET', 
     headers: { 'Content-Type': 'application/json' }, 
@@ -59,21 +60,17 @@ export async function GET(request) {
         const catLimpa = categoriaOriginal.trim();
         const catLower = catLimpa.toLowerCase();
         
-        // EXTRAÇÃO DE 9 DÍGITOS: Busca em qualquer lugar do texto
         const matchCodigo = catLimpa.match(/\d{9}/);
         const codigo9 = matchCodigo ? matchCodigo[0] : "";
         
-        // CRUZAMENTO FLEXÍVEL COM O SUPABASE
         const mapeamento = planoContas.find(p => {
           const pCodigo = p.codigo_9_digitos ? String(p.codigo_9_digitos).trim() : "";
           const pNome = p.categoria_nibo ? String(p.categoria_nibo).trim().toLowerCase() : "";
-          
-          // Match por código OU por nome exato (ignorando maiúsculas)
           return (pCodigo && pCodigo === codigo9) || (pNome && pNome === catLower);
         });
 
         return {
-          data: item.paymentDate, // Foco na data de pagamento
+          data: item.paymentDate,
           valor: parseFloat(item.value),
           categoria: catLimpa,
           grupo_dfc: mapeamento ? mapeamento.grupo_dfc : "OUTROS / NAO CLASSIFICADOS",
