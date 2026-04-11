@@ -1,273 +1,251 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-const supabase = (supabaseUrl && supabaseServiceKey)
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
+const NIBO_BASE = "https://api.nibo.com.br/empresas/v1";
 
-const NIBO_API_URL = 'https://api.nibo.com.br/empresas/v1';
+// ── Empresas configuradas ─────────────────────────────────────────────────────
+const EMPRESAS = [
+  { nome: "Victec", apiKeyEnv: "NIBO_API_KEY_VICTEC" },
+  { nome: "VMC Tech", apiKeyEnv: "NIBO_API_KEY_VMCTECH" },
+];
 
-// ─────────────────────────────────────────────────────────────
-// Busca paginada genérica — suporta @odata.nextLink
-// ─────────────────────────────────────────────────────────────
-async function fetchAllPages(firstUrl) {
-  let items = [];
-  let url = firstUrl;
-
-  while (url) {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Erro na API do NIBO (${response.status}): ${errorBody}`);
-    }
-
-    const data = await response.json();
-    items = items.concat(data.items || []);
-    url = data['@odata.nextLink'] || null;
-  }
-
-  return items;
+// ── Busca paginada mensal ─────────────────────────────────────────────────────
+async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
+  const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(ano, mes, 0).getDate();
+  const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
+  const url = `${NIBO_BASE}/${endpoint}?apitoken=${apiKey}&$filter=date ge ${start} and date le ${end}&$top=500${extra}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items || [];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Chamada 1: /receipts — entradas com data real de caixa
-// ─────────────────────────────────────────────────────────────
-async function fetchReceipts(apiKey, startDate, endDate) {
-  const url = `${NIBO_API_URL}/receipts?apitoken=${apiKey}&$filter=date ge ${startDate} and date le ${endDate}&$top=500&$expand=stakeholder,category`;
-  return fetchAllPages(url);
+async function fetchSchedules(apiKey, tipo, mes, ano) {
+  const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(ano, mes, 0).getDate();
+  const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
+  const url = `${NIBO_BASE}/schedules/${tipo}?apitoken=${apiKey}&$filter=isPaid eq true and dueDate ge ${start} and dueDate le ${end}&$top=500&$expand=category,categories`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items || [];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Chamada 2: /payments — saídas com data real de caixa
-// ─────────────────────────────────────────────────────────────
-async function fetchPayments(apiKey, startDate, endDate) {
-  const url = `${NIBO_API_URL}/payments?apitoken=${apiKey}&$filter=date ge ${startDate} and date le ${endDate}&$top=500&$expand=stakeholder,category`;
-  return fetchAllPages(url);
-}
-
-// ─────────────────────────────────────────────────────────────
-// Chamada 3: /schedules/credit com categories
-// Sub-categorias: impostos retidos, juros, multas, descontos
-// ─────────────────────────────────────────────────────────────
-async function fetchCreditSchedules(apiKey, startDate, endDate) {
-  const url = `${NIBO_API_URL}/schedules/credit?apitoken=${apiKey}&$filter=isPaid eq true and dueDate ge ${startDate} and dueDate le ${endDate}&$top=500&$expand=stakeholder,category,categories`;
-  return fetchAllPages(url);
-}
-
-// ─────────────────────────────────────────────────────────────
-// Chamada 4: /schedules/debit com categories
-// Sub-categorias: rateios por centro de custo em débitos
-// ─────────────────────────────────────────────────────────────
-async function fetchDebitSchedules(apiKey, startDate, endDate) {
-  const url = `${NIBO_API_URL}/schedules/debit?apitoken=${apiKey}&$filter=isPaid eq true and dueDate ge ${startDate} and dueDate le ${endDate}&$top=500&$expand=stakeholder,category,categories`;
-  return fetchAllPages(url);
-}
-
-// ─────────────────────────────────────────────────────────────
-// Mapeamento de categoria → grupo DFC
-// 1ª camada: texto exato em categoria_nibo (categorias nativas NIBO)
-// 2ª camada: primeiros 9 dígitos numéricos em codigo_9_digitos
-// Fallback: "OUTROS / NÃO CLASSIFICADOS"
-// ─────────────────────────────────────────────────────────────
-function mapearCategoria(categoriaNome, planoContas) {
-  const nome = (categoriaNome || '').trim();
-  if (!nome) return 'OUTROS / NÃO CLASSIFICADOS';
-
-  // 1ª camada: nome nativo exato (categorias padrão do NIBO)
-  const porNome = planoContas.find(
-    p => p.categoria_nibo && p.categoria_nibo.trim() === nome
-  );
-  if (porNome) return porNome.grupo_dfc;
-
-  // 2ª camada: código 9 dígitos numéricos (categorias personalizadas)
-  const primeiros9 = nome.substring(0, 9);
-  if (primeiros9.length === 9 && /^\d{9}$/.test(primeiros9)) {
-    const porCodigo = planoContas.find(
-      p => p.codigo_9_digitos && p.codigo_9_digitos.trim() === primeiros9
-    );
-    if (porCodigo) return porCodigo.grupo_dfc;
-  }
-
-  return 'OUTROS / NÃO CLASSIFICADOS';
-}
-
-// ─────────────────────────────────────────────────────────────
-// Constrói mapa scheduleId → array de sub-categorias
-// ─────────────────────────────────────────────────────────────
+// ── Mapa de schedules por scheduleId ──────────────────────────────────────────
+// Retorna: { scheduleId: [ { nome, valor, tipo } ] }
 function buildScheduleMap(schedules) {
   const map = {};
   for (const s of schedules) {
     const sid = s.scheduleId;
     if (!sid) continue;
+    const mainCat = s.category?.name || "";
+    const paidValue = parseFloat(s.paidValue || s.value || 0);
     const cats = s.categories || [];
+
     if (cats.length > 0) {
-      map[sid] = cats.map(c => ({
-        categoriaNome: (c.categoryName || '').trim(),
-        valor: parseFloat(c.value || 0),
-      }));
+      const entries = cats
+        .filter((c) => c.categoryName && parseFloat(c.value || 0) > 0)
+        .map((c) => ({
+          nome: (c.categoryName || "").trim(),
+          valor: parseFloat(c.value || 0),
+          tipo: (c.type || "in").toLowerCase(),
+        }));
+      map[sid] = entries.length > 0 ? entries : [{ nome: mainCat, valor: paidValue, tipo: "in" }];
+    } else {
+      map[sid] = [{ nome: mainCat, valor: paidValue, tipo: "in" }];
     }
   }
   return map;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Acumula valor na matriz agregada [mes][grupo]
-// mes: 0-11 (Janeiro=0)
-// ─────────────────────────────────────────────────────────────
-function acumular(matriz, mes, grupo, valor) {
-  if (mes < 0 || mes > 11) return;
-  if (!matriz[grupo]) matriz[grupo] = Array(12).fill(0);
-  matriz[grupo][mes] += valor;
+// ── Mapeamento de categoria para grupo DFC ────────────────────────────────────
+function mapearCategoria(nome, planoContas) {
+  nome = (nome || "").trim();
+  if (!nome) return "OUTROS / NÃO CLASSIFICADOS";
+
+  // 1ª camada: nome nativo exato (categorias nativas do NIBO)
+  for (const p of planoContas) {
+    if (p.categoria_nibo && p.categoria_nibo === nome) return p.grupo_dfc;
+  }
+
+  // 2ª camada: primeiros 9 dígitos numéricos (categorias personalizadas)
+  const p9 = nome.substring(0, 9);
+  if (p9.length === 9 && /^\d{9}$/.test(p9)) {
+    for (const p of planoContas) {
+      if (p.codigo_9_digitos && p.codigo_9_digitos === p9) return p.grupo_dfc;
+    }
+  }
+
+  return "OUTROS / NÃO CLASSIFICADOS";
 }
 
-// ─────────────────────────────────────────────────────────────
-// Processa receipts (entradas) e acumula na matriz
-// ─────────────────────────────────────────────────────────────
-function processarReceipts(receipts, creditScheduleMap, planoContas, matriz) {
+// ── Processar um mês para uma empresa ────────────────────────────────────────
+async function processarMes(apiKey, mes, ano, planoContas) {
+  const [receipts, payments, creditSch, debitSch] = await Promise.all([
+    fetchMonth(apiKey, "receipts", mes, ano, "&$expand=category"),
+    fetchMonth(apiKey, "payments", mes, ano, "&$expand=category"),
+    fetchSchedules(apiKey, "credit", mes, ano),
+    fetchSchedules(apiKey, "debit", mes, ano),
+  ]);
+
+  const creditMap = buildScheduleMap(creditSch);
+  const debitMap = buildScheduleMap(debitSch);
+
+  const acumulado = {};
+  const acumular = (grupo, valor) => {
+    acumulado[grupo] = (acumulado[grupo] || 0) + valor;
+  };
+
+  // Receipts (entradas)
   for (const item of receipts) {
     if (item.isTransfer) continue;
+    const catNome = item.category?.name || "";
+    const sid = item.scheduleId;
+    const sch = sid ? creditMap[sid] : null;
 
-    const mes = new Date(item.date).getUTCMonth();
-    const valor = parseFloat(item.value || 0);
-    const catNome = (item.category?.name || '').trim();
-
-    // Lançamento principal
-    const grupoPrincipal = mapearCategoria(catNome, planoContas);
-    acumular(matriz, mes, grupoPrincipal, valor);
-
-    // Sub-categorias do schedule (impostos retidos, descontos, juros, multas)
-    if (!item.scheduleId) continue;
-    const subCats = creditScheduleMap[item.scheduleId] || [];
-
-    for (const sub of subCats) {
-      // Ignorar a categoria principal já contabilizada
-      const p9sub = sub.categoriaNome.substring(0, 9);
-      const p9cat = catNome.substring(0, 9);
-      const mesmaCat =
-        sub.categoriaNome === catNome ||
-        (p9sub.length === 9 && /^\d{9}$/.test(p9sub) &&
-         p9cat.length === 9 && /^\d{9}$/.test(p9cat) &&
-         p9sub === p9cat);
-      if (mesmaCat) continue;
-
-      const grupoSub = mapearCategoria(sub.categoriaNome, planoContas);
-      if (grupoSub === 'OUTROS / NÃO CLASSIFICADOS') continue;
-
-      // Impostos retidos e descontos são valores que saem da receita (negativos)
-      acumular(matriz, mes, grupoSub, sub.valor * -1);
+    if (sch) {
+      for (const entry of sch) {
+        const grupo = mapearCategoria(entry.nome, planoContas);
+        const sinal = entry.tipo === "out" ? -1 : 1;
+        acumular(grupo, entry.valor * sinal);
+      }
+    } else {
+      if (!catNome) continue;
+      const grupo = mapearCategoria(catNome, planoContas);
+      acumular(grupo, parseFloat(item.value || 0));
     }
   }
-}
 
-// ─────────────────────────────────────────────────────────────
-// Processa payments (saídas) e acumula na matriz
-// ─────────────────────────────────────────────────────────────
-function processarPayments(payments, debitScheduleMap, planoContas, matriz) {
+  // Payments (saídas — sempre negativo)
   for (const item of payments) {
     if (item.isTransfer) continue;
+    const catNome = item.category?.name || "";
+    const sid = item.scheduleId;
+    const sch = sid ? debitMap[sid] : null;
 
-    const mes = new Date(item.date).getUTCMonth();
-    const valor = parseFloat(item.value || 0) * -1; // saídas são negativas
-    const catNome = (item.category?.name || '').trim();
-
-    if (!catNome) continue;
-
-    const grupoPrincipal = mapearCategoria(catNome, planoContas);
-    acumular(matriz, mes, grupoPrincipal, valor);
-
-    // Sub-categorias do schedule (rateios)
-    if (!item.scheduleId) continue;
-    const subCats = debitScheduleMap[item.scheduleId] || [];
-
-    for (const sub of subCats) {
-      const p9sub = sub.categoriaNome.substring(0, 9);
-      const p9cat = catNome.substring(0, 9);
-      const mesmaCat =
-        sub.categoriaNome === catNome ||
-        (p9sub.length === 9 && /^\d{9}$/.test(p9sub) &&
-         p9cat.length === 9 && /^\d{9}$/.test(p9cat) &&
-         p9sub === p9cat);
-      if (mesmaCat) continue;
-
-      const grupoSub = mapearCategoria(sub.categoriaNome, planoContas);
-      if (grupoSub === 'OUTROS / NÃO CLASSIFICADOS') continue;
-
-      acumular(matriz, mes, grupoSub, sub.valor * -1);
+    if (sch) {
+      for (const entry of sch) {
+        const grupo = mapearCategoria(entry.nome, planoContas);
+        acumular(grupo, entry.valor * -1);
+      }
+    } else {
+      if (!catNome) continue;
+      const grupo = mapearCategoria(catNome, planoContas);
+      acumular(grupo, parseFloat(item.value || 0) * -1);
     }
   }
+
+  return acumulado;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Handler principal GET
-// ─────────────────────────────────────────────────────────────
+// ── Ordem e estrutura do DFC ──────────────────────────────────────────────────
+const LINHAS_DFC = [
+  { key: "RECEITAS OPERACIONAIS", label: "RECEITAS OPERACIONAIS", tipo: "linha" },
+  { key: "(-) IMPOSTOS SOBRE VENDAS", label: "(-) IMPOSTOS SOBRE VENDAS", tipo: "linha" },
+  { key: "(=) RECEITA LÍQUIDA", label: "(=) RECEITA LÍQUIDA", tipo: "calculado" },
+  { key: "(-) CUSTOS OPERACIONAIS", label: "(-) CUSTOS OPERACIONAIS", tipo: "linha" },
+  { key: "(-) DESPESAS ADMINISTRATIVAS", label: "(-) DESPESAS ADMINISTRATIVAS", tipo: "linha" },
+  { key: "(-) DESPESAS COMERCIAIS", label: "(-) DESPESAS COMERCIAIS", tipo: "linha" },
+  { key: "(=) FLUXO OPERACIONAL (FCO)", label: "(=) FLUXO OPERACIONAL (FCO)", tipo: "calculado" },
+  { key: "(+/-) FLUXO DE INVESTIMENTO (FCI)", label: "(+/-) FLUXO DE INVESTIMENTO (FCI)", tipo: "linha" },
+  { key: "(+/-) FLUXO DE FINANCIAMENTO (FCF)", label: "(+/-) FLUXO DE FINANCIAMENTO (FCF)", tipo: "linha" },
+  { key: "(-) DESPESAS FINANCEIRAS", label: "(-) DESPESAS FINANCEIRAS", tipo: "linha" },
+  { key: "OUTROS / NÃO CLASSIFICADOS", label: "OUTROS / NÃO CLASSIFICADOS", tipo: "linha" },
+  { key: "(=) SALDO LÍQUIDO DO PERÍODO", label: "(=) SALDO LÍQUIDO DO PERÍODO", tipo: "calculado" },
+];
+
+// ── Handler principal ─────────────────────────────────────────────────────────
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const empresa = searchParams.get('empresa');
-  const ano = searchParams.get('ano') || new Date().getFullYear().toString();
+  const empresaNome = searchParams.get("empresa");
+  const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
 
+  // Encontrar empresa
+  const empresa = EMPRESAS.find(
+    (e) => e.nome.toLowerCase() === (empresaNome || "").toLowerCase()
+  );
   if (!empresa) {
-    return NextResponse.json({ error: 'O parâmetro "empresa" é obrigatório.' }, { status: 400 });
-  }
-  if (!supabase) {
-    return NextResponse.json({ error: 'Configuração do Supabase ausente.' }, { status: 500 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
   }
 
-  const apiKey = empresa === 'Victec'
-    ? process.env.NIBO_API_KEY_VICTEC
-    : process.env.NIBO_API_KEY_VMCTECH;
-
+  const apiKey = process.env[empresa.apiKeyEnv];
   if (!apiKey) {
-    return NextResponse.json(
-      { error: `Chave de API do NIBO não encontrada para a empresa "${empresa}".` },
-      { status: 500 }
+    return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
+  }
+
+  // Carregar plano de contas do Supabase
+  const { data: planoContas, error: planoError } = await supabase
+    .from("plano_contas_dfc")
+    .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
+
+  if (planoError) {
+    return NextResponse.json({ error: "Erro ao carregar plano de contas" }, { status: 500 });
+  }
+
+  // Processar todos os 12 meses em paralelo (grupos de 3 para não sobrecarregar)
+  const mesesData = new Array(12).fill(null);
+  for (let batch = 0; batch < 4; batch++) {
+    const mesesBatch = [batch * 3 + 1, batch * 3 + 2, batch * 3 + 3];
+    const results = await Promise.all(
+      mesesBatch.map((mes) => processarMes(apiKey, mes, ano, planoContas))
     );
+    results.forEach((r, i) => {
+      mesesData[batch * 3 + i] = r;
+    });
   }
 
-  const startDate = `${ano}-01-01`;
-  const endDate = `${ano}-12-31`;
+  // Montar matriz DFC
+  const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
-  try {
-    // Todas as chamadas em paralelo para máxima performance
-    const [
-      receipts,
-      payments,
-      creditSchedules,
-      debitSchedules,
-      { data: planoContas, error: errorSupabase },
-    ] = await Promise.all([
-      fetchReceipts(apiKey, startDate, endDate),
-      fetchPayments(apiKey, startDate, endDate),
-      fetchCreditSchedules(apiKey, startDate, endDate),
-      fetchDebitSchedules(apiKey, startDate, endDate),
-      supabase.from('plano_contas_dfc').select('codigo_9_digitos, categoria_nibo, grupo_dfc'),
-    ]);
+  const matriz = LINHAS_DFC.map((linha) => {
+    const valores = mesesData.map((mesAcum) => {
+      if (!mesAcum) return 0;
+      if (linha.tipo === "calculado") return null; // calculado depois
+      return mesAcum[linha.key] || 0;
+    });
+    return { key: linha.key, label: linha.label, tipo: linha.tipo, valores };
+  });
 
-    if (errorSupabase) {
-      throw new Error(`Erro no Supabase: ${errorSupabase.message}`);
-    }
+  // Calcular linhas derivadas
+  for (let m = 0; m < 12; m++) {
+    const get = (key) => {
+      const row = matriz.find((r) => r.key === key);
+      return row ? row.valores[m] || 0 : 0;
+    };
+    const set = (key, val) => {
+      const row = matriz.find((r) => r.key === key);
+      if (row) row.valores[m] = val;
+    };
 
-    // Mapas de sub-categorias por scheduleId
-    const creditScheduleMap = buildScheduleMap(creditSchedules);
-    const debitScheduleMap = buildScheduleMap(debitSchedules);
+    const recOp = get("RECEITAS OPERACIONAIS");
+    const impVendas = get("(-) IMPOSTOS SOBRE VENDAS");
+    const recLiq = recOp + impVendas;
+    set("(=) RECEITA LÍQUIDA", recLiq);
 
-    // Matriz agregada: { "RECEITAS OPERACIONAIS": [jan, fev, ..., dez], ... }
-    const matriz = {};
+    const custosOp = get("(-) CUSTOS OPERACIONAIS");
+    const despAdmin = get("(-) DESPESAS ADMINISTRATIVAS");
+    const despCom = get("(-) DESPESAS COMERCIAIS");
+    const fco = recLiq + custosOp + despAdmin + despCom;
+    set("(=) FLUXO OPERACIONAL (FCO)", fco);
 
-    processarReceipts(receipts, creditScheduleMap, planoContas, matriz);
-    processarPayments(payments, debitScheduleMap, planoContas, matriz);
-
-    return NextResponse.json({ empresa, ano, matriz });
-
-  } catch (error) {
-    console.error('Erro na API DFC:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const fci = get("(+/-) FLUXO DE INVESTIMENTO (FCI)");
+    const fcf = get("(+/-) FLUXO DE FINANCIAMENTO (FCF)");
+    const despFin = get("(-) DESPESAS FINANCEIRAS");
+    const outros = get("OUTROS / NÃO CLASSIFICADOS");
+    const saldo = fco + fci + fcf + despFin + outros;
+    set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
   }
+
+  return NextResponse.json({
+    empresa: empresa.nome,
+    ano,
+    meses,
+    matriz,
+  });
 }
