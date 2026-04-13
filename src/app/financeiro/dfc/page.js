@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function DFCPage() {
+function DFCContent() {
   const searchParams = useSearchParams();
   const [empresa, setEmpresa] = useState('Victec');
   const [ano, setAno] = useState('2026');
@@ -241,5 +241,13 @@ export default function DFCPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DFCPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-white bg-[#0f172a] min-h-screen">Carregando DFC...</div>}>
+      <DFCContent />
+    </Suspense>
   );
 }
