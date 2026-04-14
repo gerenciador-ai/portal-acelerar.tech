@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 
 function EmpresaTab({ nome, logo, isActive, onClick }) {
@@ -18,12 +18,19 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
     );
 }
 
-export default function DFCPage() {
+// ─── ADIÇÃO 1: Componente interno isolado para uso do Suspense ───────────────
+function DFCContent() {
     const [empresaAtiva, setEmpresaAtiva] = useState(null);
     const [dados, setDados] = useState(null);
     const [loading, setLoading] = useState(false);
     const [visao, setVisao] = useState('Mensal');
     const [anoAtivo, setAnoAtivo] = useState(2026);
+
+    // ─── ADIÇÃO 2: Estados do detalhamento ───────────────────────────────────
+    const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null });
+    const [detalhamento, setDetalhamento] = useState([]);
+    const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
+    // ─────────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         if (empresaAtiva && empresaAtiva !== 'Consolidado') {
@@ -50,6 +57,30 @@ export default function DFCPage() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
     };
 
+    // ─── ADIÇÃO 3: Função de carregamento do detalhamento ────────────────────
+    const carregarDetalhamento = async (mesIdx, grupoKey) => {
+        // Clicou na mesma célula: fecha o detalhamento
+        if (selecionado.mesIdx === mesIdx && selecionado.grupoKey === grupoKey) {
+            setSelecionado({ mesIdx: null, grupoKey: null });
+            setDetalhamento([]);
+            return;
+        }
+        setSelecionado({ mesIdx, grupoKey });
+        setLoadingDetalhamento(true);
+        setDetalhamento([]);
+        try {
+            const mes = mesIdx + 1; // mesIdx é 0-based; API espera 1-12
+            const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&grupo=${encodeURIComponent(grupoKey)}`);
+            const data = await res.json();
+            setDetalhamento(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Erro ao carregar detalhamento:', error);
+        } finally {
+            setLoadingDetalhamento(false);
+        }
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+
     const renderTabelaMensal = () => {
         if (!dados || !dados.matriz) return null;
         const meses = dados.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
@@ -69,11 +100,30 @@ export default function DFCPage() {
                             return (
                                 <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
                                     <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
-                                    {linha.valores.map((valor, mIdx) => (
-                                        <td key={mIdx} className={`p-4 text-sm text-right ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
-                                            {formatarMoeda(valor || 0)}
-                                        </td>
-                                    ))}
+                                    {linha.valores.map((valor, mIdx) => {
+                                        // ─── ADIÇÃO 4: Célula clicável com tooltip ───────────────────────────
+                                        const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
+                                        return (
+                                            <td key={mIdx} className="p-0 relative group">
+                                                <button
+                                                    onClick={() => carregarDetalhamento(mIdx, linha.key)}
+                                                    className={`w-full h-full p-4 text-sm text-right transition-all duration-150 focus:outline-none
+                                                        ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
+                                                        ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : 'hover:bg-white/5'}
+                                                    `}
+                                                >
+                                                    {formatarMoeda(valor || 0)}
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-50 pointer-events-none">
+                                                    <div className="bg-gray-900 text-white/80 text-[10px] py-1 px-2 rounded shadow-xl border border-white/10 whitespace-nowrap">
+                                                        Exibir detalhamento
+                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        );
+                                        // ────────────────────────────────────────────────────────────────────
+                                    })}
                                 </tr>
                             );
                         })}
@@ -82,6 +132,94 @@ export default function DFCPage() {
             </div>
         );
     };
+
+    // ─── ADIÇÃO 5: Seção de detalhamento abaixo da tabela ────────────────────
+    const renderDetalhamento = () => {
+        const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+        const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
+        const nomeGrupo = selecionado.grupoKey;
+
+        return (
+            <div className="space-y-4 animate-in fade-in duration-300">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <span className="w-1.5 h-6 bg-yellow-400 rounded-full"></span>
+                    Detalhamento dos Lançamentos
+                    {nomeMes && nomeGrupo && (
+                        <span className="ml-2 text-xs font-normal text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
+                            {nomeGrupo} • {nomeMes}/{anoAtivo}
+                        </span>
+                    )}
+                </h3>
+
+                {!selecionado.mesIdx && selecionado.mesIdx !== 0 ? (
+                    <div className="flex items-center justify-center h-32 rounded-xl border border-dashed border-white/10 bg-white/5">
+                        <p className="text-xs text-white/30 font-medium uppercase tracking-widest">
+                            Para exibir o detalhamento, selecione o mês e a categoria que deseja detalhar no quadro acima.
+                        </p>
+                    </div>
+                ) : loadingDetalhamento ? (
+                    <div className="flex flex-col items-center justify-center h-32 space-y-3">
+                        <div className="w-6 h-6 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Buscando lançamentos no Nibo...</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-white/5 text-[10px] text-white/50 uppercase font-bold tracking-widest">
+                                    <th className="p-4 border-b border-white/10">Data</th>
+                                    <th className="p-4 border-b border-white/10">Nome</th>
+                                    <th className="p-4 border-b border-white/10">Descrição</th>
+                                    <th className="p-4 border-b border-white/10">Categoria</th>
+                                    <th className="p-4 border-b border-white/10">Centro de Custo</th>
+                                    <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {detalhamento.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="6" className="p-8 text-center text-xs text-white/30 italic">
+                                            Nenhum lançamento encontrado para este filtro.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    detalhamento.map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
+                                            <td className="p-4 text-sm text-white/60 font-mono">
+                                                {item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                            </td>
+                                            <td className="p-4 text-sm text-white/80 font-medium">{item.nome || '—'}</td>
+                                            <td className="p-4 text-sm text-white/50 italic">{item.descricao || '—'}</td>
+                                            <td className="p-4 text-sm">
+                                                <span className="text-[10px] text-white/60 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
+                                                    {item.categoria || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-sm text-white/50">{item.centro_custo || '—'}</td>
+                                            <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
+                                                {formatarMoeda(item.valor || 0)}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                            {detalhamento.length > 0 && (
+                                <tfoot>
+                                    <tr className="bg-acelerar-light-blue/10 font-bold border-t border-white/10">
+                                        <td colSpan="5" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
+                                        <td className={`p-4 text-sm text-right font-bold ${detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0) < 0 ? 'text-red-400' : 'text-white'}`}>
+                                            {formatarMoeda(detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0))}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                )}
+            </div>
+        );
+    };
+    // ─────────────────────────────────────────────────────────────────────────
 
     return (
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
@@ -121,10 +259,26 @@ export default function DFCPage() {
                                 Demonstrativo de Fluxo de Caixa - {empresaAtiva}
                             </h3>
                             {renderTabelaMensal()}
+                            {/* ─── ADIÇÃO 6: Renderiza seção de detalhamento abaixo da tabela ─── */}
+                            {renderDetalhamento()}
+                            {/* ──────────────────────────────────────────────────────────────── */}
                         </div>
                     )}
                 </div>
             )}
         </div>
+    );
+}
+
+// ─── ADIÇÃO 7: Wrapper com Suspense (exigido pelo Next.js 14) ─────────────────
+export default function DFCPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 items-center justify-center">
+                <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        }>
+            <DFCContent />
+        </Suspense>
     );
 }
