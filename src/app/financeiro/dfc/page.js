@@ -18,7 +18,6 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
     );
 }
 
-// ─── ADIÇÃO 1: Componente interno isolado para uso do Suspense ───────────────
 function DFCContent() {
     const [empresaAtiva, setEmpresaAtiva] = useState(null);
     const [dados, setDados] = useState(null);
@@ -26,11 +25,10 @@ function DFCContent() {
     const [visao, setVisao] = useState('Mensal');
     const [anoAtivo, setAnoAtivo] = useState(2026);
 
-    // ─── ADIÇÃO 2: Estados do detalhamento ───────────────────────────────────
-    const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null });
+    // ESTADOS DO DETALHAMENTO
+    const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null, grupoLabel: null });
     const [detalhamento, setDetalhamento] = useState([]);
     const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
-    // ─────────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         if (empresaAtiva && empresaAtiva !== 'Consolidado') {
@@ -57,19 +55,19 @@ function DFCContent() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
     };
 
-    // ─── ADIÇÃO 3: Função de carregamento do detalhamento ────────────────────
-    const carregarDetalhamento = async (mesIdx, grupoKey) => {
-        // Clicou na mesma célula: fecha o detalhamento
+    // FUNÇÃO DE CARREGAMENTO DO DETALHAMENTO
+    const carregarDetalhamento = async (mesIdx, grupoKey, grupoLabel) => {
         if (selecionado.mesIdx === mesIdx && selecionado.grupoKey === grupoKey) {
-            setSelecionado({ mesIdx: null, grupoKey: null });
+            setSelecionado({ mesIdx: null, grupoKey: null, grupoLabel: null });
             setDetalhamento([]);
             return;
         }
-        setSelecionado({ mesIdx, grupoKey });
+        setSelecionado({ mesIdx, grupoKey, grupoLabel });
         setLoadingDetalhamento(true);
         setDetalhamento([]);
         try {
-            const mes = mesIdx + 1; // mesIdx é 0-based; API espera 1-12
+            const mes = mesIdx + 1;
+            // IMPORTANTE: Enviamos o grupoKey (chave técnica) para a API bater com o banco
             const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&grupo=${encodeURIComponent(grupoKey)}`);
             const data = await res.json();
             setDetalhamento(Array.isArray(data) ? data : []);
@@ -79,7 +77,6 @@ function DFCContent() {
             setLoadingDetalhamento(false);
         }
     };
-    // ─────────────────────────────────────────────────────────────────────────
 
     const renderTabelaMensal = () => {
         if (!dados || !dados.matriz) return null;
@@ -101,12 +98,11 @@ function DFCContent() {
                                 <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
                                     <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                                     {linha.valores.map((valor, mIdx) => {
-                                        // ─── ADIÇÃO 4: Célula clicável com tooltip ───────────────────────────
                                         const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
                                         return (
                                             <td key={mIdx} className="p-0 relative group">
                                                 <button
-                                                    onClick={() => carregarDetalhamento(mIdx, linha.key)}
+                                                    onClick={() => carregarDetalhamento(mIdx, linha.key, linha.label)}
                                                     className={`w-full h-full p-4 text-sm text-right transition-all duration-150 focus:outline-none
                                                         ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
                                                         ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : 'hover:bg-white/5'}
@@ -122,7 +118,6 @@ function DFCContent() {
                                                 </div>
                                             </td>
                                         );
-                                        // ────────────────────────────────────────────────────────────────────
                                     })}
                                 </tr>
                             );
@@ -133,11 +128,10 @@ function DFCContent() {
         );
     };
 
-    // ─── ADIÇÃO 5: Seção de detalhamento abaixo da tabela ────────────────────
     const renderDetalhamento = () => {
         const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
         const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
-        const nomeGrupo = selecionado.grupoKey;
+        const nomeGrupo = selecionado.grupoLabel; // Exibe o rótulo visual no título do detalhamento
 
         return (
             <div className="space-y-4 animate-in fade-in duration-300">
@@ -195,7 +189,7 @@ function DFCContent() {
                                                     {item.categoria || '—'}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-sm text-white/50">{item.centro_custo || '—'}</td>
+                                            <td className="p-4 text-sm text-white/50">{item.centro_costo || '—'}</td>
                                             <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
                                                 {formatarMoeda(item.valor || 0)}
                                             </td>
@@ -219,7 +213,6 @@ function DFCContent() {
             </div>
         );
     };
-    // ─────────────────────────────────────────────────────────────────────────
 
     return (
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
@@ -259,9 +252,7 @@ function DFCContent() {
                                 Demonstrativo de Fluxo de Caixa - {empresaAtiva}
                             </h3>
                             {renderTabelaMensal()}
-                            {/* ─── ADIÇÃO 6: Renderiza seção de detalhamento abaixo da tabela ─── */}
                             {renderDetalhamento()}
-                            {/* ──────────────────────────────────────────────────────────────── */}
                         </div>
                     )}
                 </div>
@@ -270,7 +261,6 @@ function DFCContent() {
     );
 }
 
-// ─── ADIÇÃO 7: Wrapper com Suspense (exigido pelo Next.js 14) ─────────────────
 export default function DFCPage() {
     return (
         <Suspense fallback={
