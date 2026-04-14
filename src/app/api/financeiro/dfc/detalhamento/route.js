@@ -8,7 +8,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Função auxiliar para buscar dados do NIBO com tratamento de erros
 async function fetchNiboData(apiKey, endpoint) {
-  const url = `https://api.nibo.com.br/v1${endpoint}`;
+  // CORREÇÃO 1: URL base correta conforme o route.js principal do DFC
+  const url = `https://api.nibo.com.br/empresas/v1${endpoint}`;
   try {
     const res = await fetch(url, {
       headers: { 'apikey': apiKey },
@@ -59,11 +60,12 @@ export async function GET(request) {
   const endDate = `${ano}-${mes.padStart(2, '0')}-${lastDay}`;
 
   // 3. Buscar dados do NIBO em paralelo (Apenas do mês solicitado)
+  // CORREÇÃO 2: Adicionado $expand=category e isPaid eq true nos schedules
   const [receipts, payments, creditSchedules, debitSchedules] = await Promise.all([
-    fetchNiboData(apiKey, `/receipts?$filter=date ge ${startDate} and date le ${endDate} and isTransfer eq false`),
-    fetchNiboData(apiKey, `/payments?$filter=date ge ${startDate} and date le ${endDate} and isTransfer eq false`),
-    fetchNiboData(apiKey, `/schedules/credit?$filter=dueDate ge ${startDate} and dueDate le ${endDate}&$expand=categories`),
-    fetchNiboData(apiKey, `/schedules/debit?$filter=dueDate ge ${startDate} and dueDate le ${endDate}&$expand=categories`)
+    fetchNiboData(apiKey, `/receipts?$filter=date ge ${startDate} and date le ${endDate} and isTransfer eq false&$expand=category`),
+    fetchNiboData(apiKey, `/payments?$filter=date ge ${startDate} and date le ${endDate} and isTransfer eq false&$expand=category`),
+    fetchNiboData(apiKey, `/schedules/credit?$filter=isPaid eq true and dueDate ge ${startDate} and dueDate le ${endDate}&$expand=category,categories`),
+    fetchNiboData(apiKey, `/schedules/debit?$filter=isPaid eq true and dueDate ge ${startDate} and dueDate le ${endDate}&$expand=category,categories`)
   ]);
 
   // Criar mapa de schedules para buscar sub-categorias (impostos, descontos, etc)
