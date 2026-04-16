@@ -6,14 +6,21 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
     return (
         <button 
             onClick={onClick}
-            className={`flex items-center gap-3 px-6 py-3 transition-all duration-200 border-b-2 ${
+            className={`flex items-center justify-center px-8 py-4 transition-all duration-200 border-b-2 ${
                 isActive 
-                ? 'border-acelerar-light-blue bg-white/5 text-white' 
-                : 'border-transparent text-white/40 hover:text-white/70 hover:bg-white/5'
+                ? 'border-acelerar-light-blue bg-white/5' 
+                : 'border-transparent hover:bg-white/5'
             }`}
         >
-            {logo && <Image src={logo} alt={nome} width={24} height={24} className={isActive ? 'opacity-100' : 'opacity-40'} />}
-            <span className="text-sm font-medium uppercase tracking-wider">{nome}</span>
+            {logo && (
+                <Image 
+                    src={logo} 
+                    alt={nome} 
+                    width={56} 
+                    height={56} 
+                    className={`transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-80'}`}
+                />
+            )}
         </button>
     );
 }
@@ -215,7 +222,7 @@ function DFCContent() {
     return (
         <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
             <div className="flex items-center justify-between border-b border-white/10">
-                <div className="flex">
+                <div className="flex gap-2">
                     <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
                     <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
                     <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
