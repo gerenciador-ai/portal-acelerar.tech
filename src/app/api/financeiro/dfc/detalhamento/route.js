@@ -88,7 +88,7 @@ export async function GET(request) {
   const empresaNome = searchParams.get("empresa");
   const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
   const mesSolicitado = parseInt(searchParams.get("mes"));
-  const grupoSolicitado = searchParams.get("grupo"); // Ex: "(-) DESPESAS ADMINISTRATIVAS"
+  const grupoSolicitado = searchParams.get("grupo");
 
   if (!empresaNome || !mesSolicitado || !grupoSolicitado) {
     return NextResponse.json({ error: "Parâmetros ausentes" }, { status: 400 });
@@ -133,11 +133,11 @@ export async function GET(request) {
         if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           const sinal = entry.tipo === "out" ? -1 : 1;
           detalhamento.push({
-            data: item.date,
-            nome: item.description || "Lançamento NIBO",
-            descricao: entry.nome,
-            categoria: entry.nome,
-            centro_costo: item.costCenter?.name || "-",
+            data: item.date, // DATA
+            nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
+            descricao: entry.nome, // DESCRIÇÃO (Recebe dados de categoria)
+            categoria: entry.nome, // CATEGORIA (Repete categoria)
+            centro_costo: "-", // CENTRO DE CUSTO (A remover)
             valor: entry.valor * sinal
           });
         }
@@ -145,11 +145,11 @@ export async function GET(request) {
     } else {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
-          data: item.date,
-          nome: item.description || "Lançamento NIBO",
-          descricao: "Lançamento direto",
-          categoria: catNome,
-          centro_costo: item.costCenter?.name || "-",
+          data: item.date, // DATA
+          nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
+          descricao: catNome, // DESCRIÇÃO (Recebe dados de categoria)
+          categoria: catNome, // CATEGORIA (Repete categoria)
+          centro_costo: "-", // CENTRO DE CUSTO (A remover)
           valor: parseFloat(item.value || 0)
         });
       }
@@ -167,11 +167,11 @@ export async function GET(request) {
       for (const entry of sch) {
         if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           detalhamento.push({
-            data: item.date,
-            nome: item.description || "Lançamento NIBO",
-            descricao: entry.nome,
-            categoria: entry.nome,
-            centro_costo: item.costCenter?.name || "-",
+            data: item.date, // DATA
+            nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
+            descricao: entry.nome, // DESCRIÇÃO (Recebe dados de categoria)
+            categoria: entry.nome, // CATEGORIA (Repete categoria)
+            centro_costo: "-", // CENTRO DE CUSTO (A remover)
             valor: entry.valor * -1
           });
         }
@@ -179,11 +179,11 @@ export async function GET(request) {
     } else {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
-          data: item.date,
-          nome: item.description || "Lançamento NIBO",
-          descricao: "Lançamento direto",
-          categoria: catNome,
-          centro_costo: item.costCenter?.name || "-",
+          data: item.date, // DATA
+          nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
+          descricao: catNome, // DESCRIÇÃO (Recebe dados de categoria)
+          categoria: catNome, // CATEGORIA (Repete categoria)
+          centro_costo: "-", // CENTRO DE CUSTO (A remover)
           valor: parseFloat(item.value || 0) * -1
         });
       }
