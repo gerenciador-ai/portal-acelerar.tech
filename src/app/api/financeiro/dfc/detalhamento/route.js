@@ -82,6 +82,15 @@ function mapearCategoria(nome, planoContas) {
   return "OUTROS / NÃO CLASSIFICADOS";
 }
 
+// ── Função auxiliar para formatar data (NOVO) ──────────────────────────────────
+function formatarDataNibo(dataString) {
+  if (!dataString) return null;
+  // NIBO retorna datas como "2026-01-15" ou "2026-01-15T00:00:00"
+  // Extrair apenas a parte da data (YYYY-MM-DD)
+  const match = dataString.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : null;
+}
+
 // ── Handler de Detalhamento ───────────────────────────────────────────────────
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -120,7 +129,7 @@ export async function GET(request) {
   
   const detalhamento = [];
 
-  // Processamento fiel à lógica das linhas 106-142 do original
+  // Processamento com MAPEAMENTO CORRIGIDO
   // Receipts
   for (const item of receipts) {
     if (item.isTransfer) continue;
@@ -133,11 +142,10 @@ export async function GET(request) {
         if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           const sinal = entry.tipo === "out" ? -1 : 1;
           detalhamento.push({
-            data: item.date, // DATA
-            nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
-            descricao: entry.nome, // DESCRIÇÃO (Recebe dados de categoria)
-            categoria: entry.nome, // CATEGORIA (Repete categoria)
-            centro_costo: "-", // CENTRO DE CUSTO (A remover)
+            data: formatarDataNibo(item.date),
+            nome: item.stakeholderName || item.description || "Lançamento NIBO",
+            descricao: item.description || "—",
+            categoria: entry.nome,
             valor: entry.valor * sinal
           });
         }
@@ -145,11 +153,10 @@ export async function GET(request) {
     } else {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
-          data: item.date, // DATA
-          nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
-          descricao: catNome, // DESCRIÇÃO (Recebe dados de categoria)
-          categoria: catNome, // CATEGORIA (Repete categoria)
-          centro_costo: "-", // CENTRO DE CUSTO (A remover)
+          data: formatarDataNibo(item.date),
+          nome: item.stakeholderName || item.description || "Lançamento NIBO",
+          descricao: item.description || "—",
+          categoria: catNome,
           valor: parseFloat(item.value || 0)
         });
       }
@@ -167,11 +174,10 @@ export async function GET(request) {
       for (const entry of sch) {
         if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           detalhamento.push({
-            data: item.date, // DATA
-            nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
-            descricao: entry.nome, // DESCRIÇÃO (Recebe dados de categoria)
-            categoria: entry.nome, // CATEGORIA (Repete categoria)
-            centro_costo: "-", // CENTRO DE CUSTO (A remover)
+            data: formatarDataNibo(item.date),
+            nome: item.stakeholderName || item.description || "Lançamento NIBO",
+            descricao: item.description || "—",
+            categoria: entry.nome,
             valor: entry.valor * -1
           });
         }
@@ -179,11 +185,10 @@ export async function GET(request) {
     } else {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
-          data: item.date, // DATA
-          nome: item.description || "Lançamento NIBO", // NOME (Recebe dados de descrição)
-          descricao: catNome, // DESCRIÇÃO (Recebe dados de categoria)
-          categoria: catNome, // CATEGORIA (Repete categoria)
-          centro_costo: "-", // CENTRO DE CUSTO (A remover)
+          data: formatarDataNibo(item.date),
+          nome: item.stakeholderName || item.description || "Lançamento NIBO",
+          descricao: item.description || "—",
+          categoria: catNome,
           valor: parseFloat(item.value || 0) * -1
         });
       }
