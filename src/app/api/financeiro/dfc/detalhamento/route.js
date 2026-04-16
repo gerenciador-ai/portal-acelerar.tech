@@ -19,6 +19,7 @@ async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
   const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
   const daysInMonth = new Date(ano, mes, 0).getDate();
   const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
+  // ADICIONADO: stakeholderName e costCenter no expand
   const url = `${NIBO_BASE}/${endpoint}?apitoken=${apiKey}&$filter=date ge ${start} and date le ${end}&$top=500${extra}`;
   const res = await fetch(url);
   if (!res.ok) return [];
@@ -85,8 +86,6 @@ function mapearCategoria(nome, planoContas) {
 // ── Função auxiliar para formatar data (NOVO) ──────────────────────────────────
 function formatarDataNibo(dataString) {
   if (!dataString) return null;
-  // NIBO retorna datas como "2026-01-15" ou "2026-01-15T00:00:00"
-  // Extrair apenas a parte da data (YYYY-MM-DD)
   const match = dataString.match(/^\d{4}-\d{2}-\d{2}/);
   return match ? match[0] : null;
 }
@@ -117,9 +116,10 @@ export async function GET(request) {
 
   if (planoError) return NextResponse.json({ error: "Erro Supabase" }, { status: 500 });
 
+  // ADICIONADO: Expand de stakeholder e costCenter para pegar o Nome real
   const [receipts, payments, creditSch, debitSch] = await Promise.all([
-    fetchMonth(apiKey, "receipts", mesSolicitado, ano, "&$expand=category"),
-    fetchMonth(apiKey, "payments", mesSolicitado, ano, "&$expand=category"),
+    fetchMonth(apiKey, "receipts", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
+    fetchMonth(apiKey, "payments", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
     fetchSchedules(apiKey, "credit", mesSolicitado, ano),
     fetchSchedules(apiKey, "debit", mesSolicitado, ano),
   ]);
@@ -129,7 +129,6 @@ export async function GET(request) {
   
   const detalhamento = [];
 
-  // Processamento com MAPEAMENTO CORRIGIDO
   // Receipts
   for (const item of receipts) {
     if (item.isTransfer) continue;
@@ -143,7 +142,7 @@ export async function GET(request) {
           const sinal = entry.tipo === "out" ? -1 : 1;
           detalhamento.push({
             data: formatarDataNibo(item.date),
-            nome: item.stakeholderName || item.description || "Lançamento NIBO",
+            nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
             descricao: item.description || "—",
             categoria: entry.nome,
             valor: entry.valor * sinal
@@ -154,7 +153,7 @@ export async function GET(request) {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
           data: formatarDataNibo(item.date),
-          nome: item.stakeholderName || item.description || "Lançamento NIBO",
+          nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
           descricao: item.description || "—",
           categoria: catNome,
           valor: parseFloat(item.value || 0)
@@ -175,7 +174,7 @@ export async function GET(request) {
         if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           detalhamento.push({
             data: formatarDataNibo(item.date),
-            nome: item.stakeholderName || item.description || "Lançamento NIBO",
+            nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
             descricao: item.description || "—",
             categoria: entry.nome,
             valor: entry.valor * -1
@@ -186,7 +185,7 @@ export async function GET(request) {
       if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
           data: formatarDataNibo(item.date),
-          nome: item.stakeholderName || item.description || "Lançamento NIBO",
+          nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
           descricao: item.description || "—",
           categoria: catNome,
           valor: parseFloat(item.value || 0) * -1
