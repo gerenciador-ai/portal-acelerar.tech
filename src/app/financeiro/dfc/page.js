@@ -3,6 +3,11 @@ import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 
 function EmpresaTab({ nome, logo, isActive, onClick }) {
+    // Ajuste específico para o logo da VMC Tech que é mais largo
+    const isVMC = nome === 'VMC Tech';
+    const imgWidth = isVMC ? 100 : 56; // Aumentado para 100 para dar o destaque necessário
+    const imgHeight = 56;
+
     return (
         <button 
             onClick={onClick}
@@ -16,9 +21,10 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
                 <Image 
                     src={logo} 
                     alt={nome} 
-                    width={56} 
-                    height={56} 
-                    className={`transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-80'}`}
+                    width={imgWidth} 
+                    height={imgHeight} 
+                    className={`transition-opacity duration-200 object-contain ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-80'}`}
+                    style={{ maxHeight: '56px' }}
                 />
             )}
         </button>
