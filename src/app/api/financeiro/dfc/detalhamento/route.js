@@ -8,13 +8,13 @@ const supabase = createClient(
 
 const NIBO_BASE = "https://api.nibo.com.br/empresas/v1";
 
-// ── Empresas configuradas ─────────────────────────────────────────────────────
+// ── Empresas configuradas (Linha 12 do original) ─────────────────────────────
 const EMPRESAS = [
   { nome: "Victec", apiKeyEnv: "NIBO_API_KEY_VICTEC" },
   { nome: "VMC Tech", apiKeyEnv: "NIBO_API_KEY_VMCTECH" },
 ];
 
-// ── Busca paginada mensal ─────────────────────────────────────────────────────
+// ── Busca paginada mensal (Linha 18 do original) ─────────────────────────────
 async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
   const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
   const daysInMonth = new Date(ano, mes, 0).getDate();
@@ -37,8 +37,7 @@ async function fetchSchedules(apiKey, tipo, mes, ano) {
   return data.items || [];
 }
 
-// ── Mapa de schedules por scheduleId ──────────────────────────────────────────
-// Retorna: { scheduleId: [ { nome, valor, tipo } ] }
+// ── Mapa de schedules (Linha 42 do original) ─────────────────────────────────
 function buildScheduleMap(schedules) {
   const map = {};
   for (const s of schedules) {
@@ -64,17 +63,15 @@ function buildScheduleMap(schedules) {
   return map;
 }
 
-// ── Mapeamento de categoria para grupo DFC ────────────────────────────────────
+// ── Mapeamento de categoria (Linha 68 do original) ───────────────────────────
 function mapearCategoria(nome, planoContas) {
   nome = (nome || "").trim();
   if (!nome) return "OUTROS / NÃO CLASSIFICADOS";
 
-  // 1ª camada: nome nativo exato (categorias nativas do NIBO)
   for (const p of planoContas) {
     if (p.categoria_nibo && p.categoria_nibo === nome) return p.grupo_dfc;
   }
 
-  // 2ª camada: primeiros 9 dígitos numéricos (categorias personalizadas)
   const p9 = nome.substring(0, 9);
   if (p9.length === 9 && /^\d{9}$/.test(p9)) {
     for (const p of planoContas) {
@@ -91,35 +88,26 @@ export async function GET(request) {
   const empresaNome = searchParams.get("empresa");
   const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
   const mesSolicitado = parseInt(searchParams.get("mes"));
-  const grupoSolicitado = searchParams.get("grupo"); // Chave técnica (ex: "custos_operacionais")
+  const grupoSolicitado = searchParams.get("grupo"); // Ex: "(-) DESPESAS ADMINISTRATIVAS"
 
   if (!empresaNome || !mesSolicitado || !grupoSolicitado) {
     return NextResponse.json({ error: "Parâmetros ausentes" }, { status: 400 });
   }
 
-  // Encontrar empresa
   const empresa = EMPRESAS.find(
     (e) => e.nome.toLowerCase() === (empresaNome || "").toLowerCase()
   );
-  if (!empresa) {
-    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
-  }
+  if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
 
   const apiKey = process.env[empresa.apiKeyEnv];
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
-  }
+  if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
-  // Carregar plano de contas do Supabase
   const { data: planoContas, error: planoError } = await supabase
     .from("plano_contas_dfc")
     .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
 
-  if (planoError) {
-    return NextResponse.json({ error: "Erro ao carregar plano de contas" }, { status: 500 });
-  }
+  if (planoError) return NextResponse.json({ error: "Erro Supabase" }, { status: 500 });
 
-  // ── Processar estritamente o mês e o grupo solicitados ─────────────────────
   const [receipts, payments, creditSch, debitSch] = await Promise.all([
     fetchMonth(apiKey, "receipts", mesSolicitado, ano, "&$expand=category"),
     fetchMonth(apiKey, "payments", mesSolicitado, ano, "&$expand=category"),
@@ -132,7 +120,8 @@ export async function GET(request) {
   
   const detalhamento = [];
 
-  // Receipts (entradas)
+  // Processamento fiel à lógica das linhas 106-142 do original
+  // Receipts
   for (const item of receipts) {
     if (item.isTransfer) continue;
     const catNome = item.category?.name || "";
@@ -141,51 +130,25 @@ export async function GET(request) {
 
     if (sch) {
       for (const entry of sch) {
-        const grupo = mapearCategoria(entry.nome, planoContas);
-        // Verificação do grupo (conforme mapeamento original)
-        let match = false;
-        if (grupoSolicitado === 'receitas_operacionais' && grupo === 'RECEITAS OPERACIONAIS') match = true;
-        if (grupoSolicitado === 'impostos_vendas' && grupo === 'IMPOSTOS SOBRE VENDAS') match = true;
-        if (grupoSolicitado === 'custos_operacionais' && grupo === 'CUSTOS OPERACIONAIS') match = true;
-        if (grupoSolicitado === 'despesas_adm' && grupo === 'DESPESAS ADMINISTRATIVAS') match = true;
-        if (grupoSolicitado === 'despesas_comerciais' && grupo === 'DESPESAS COMERCIAIS') match = true;
-        if (grupoSolicitado === 'fci' && grupo === 'FCI') match = true;
-        if (grupoSolicitado === 'fcf' && grupo === 'FCF') match = true;
-        if (grupoSolicitado === 'despesas_financeiras' && grupo === 'DESPESAS FINANCEIRAS') match = true;
-        if (grupoSolicitado === 'outros' && grupo === 'OUTROS / NÃO CLASSIFICADOS') match = true;
-
-        if (match) {
+        if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           const sinal = entry.tipo === "out" ? -1 : 1;
           detalhamento.push({
             data: item.date,
             nome: item.description || "Lançamento NIBO",
-            descricao: entry.nome || "Sub-categoria",
-            categoria: entry.nome || "Sem categoria",
+            descricao: entry.nome,
+            categoria: entry.nome,
             centro_costo: item.costCenter?.name || "-",
             valor: entry.valor * sinal
           });
         }
       }
     } else {
-      if (!catNome) continue;
-      const grupo = mapearCategoria(catNome, planoContas);
-      let match = false;
-      if (grupoSolicitado === 'receitas_operacionais' && grupo === 'RECEITAS OPERACIONAIS') match = true;
-      if (grupoSolicitado === 'impostos_vendas' && grupo === 'IMPOSTOS SOBRE VENDAS') match = true;
-      if (grupoSolicitado === 'custos_operacionais' && grupo === 'CUSTOS OPERACIONAIS') match = true;
-      if (grupoSolicitado === 'despesas_adm' && grupo === 'DESPESAS ADMINISTRATIVAS') match = true;
-      if (grupoSolicitado === 'despesas_comerciais' && grupo === 'DESPESAS COMERCIAIS') match = true;
-      if (grupoSolicitado === 'fci' && grupo === 'FCI') match = true;
-      if (grupoSolicitado === 'fcf' && grupo === 'FCF') match = true;
-      if (grupoSolicitado === 'despesas_financeiras' && grupo === 'DESPESAS FINANCEIRAS') match = true;
-      if (grupoSolicitado === 'outros' && grupo === 'OUTROS / NÃO CLASSIFICADOS') match = true;
-
-      if (match) {
+      if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
           data: item.date,
           nome: item.description || "Lançamento NIBO",
           descricao: "Lançamento direto",
-          categoria: catNome || "Sem categoria",
+          categoria: catNome,
           centro_costo: item.costCenter?.name || "-",
           valor: parseFloat(item.value || 0)
         });
@@ -193,7 +156,7 @@ export async function GET(request) {
     }
   }
 
-  // Payments (saídas)
+  // Payments
   for (const item of payments) {
     if (item.isTransfer) continue;
     const catNome = item.category?.name || "";
@@ -202,49 +165,24 @@ export async function GET(request) {
 
     if (sch) {
       for (const entry of sch) {
-        const grupo = mapearCategoria(entry.nome, planoContas);
-        let match = false;
-        if (grupoSolicitado === 'receitas_operacionais' && grupo === 'RECEITAS OPERACIONAIS') match = true;
-        if (grupoSolicitado === 'impostos_vendas' && grupo === 'IMPOSTOS SOBRE VENDAS') match = true;
-        if (grupoSolicitado === 'custos_operacionais' && grupo === 'CUSTOS OPERACIONAIS') match = true;
-        if (grupoSolicitado === 'despesas_adm' && grupo === 'DESPESAS ADMINISTRATIVAS') match = true;
-        if (grupoSolicitado === 'despesas_comerciais' && grupo === 'DESPESAS COMERCIAIS') match = true;
-        if (grupoSolicitado === 'fci' && grupo === 'FCI') match = true;
-        if (grupoSolicitado === 'fcf' && grupo === 'FCF') match = true;
-        if (grupoSolicitado === 'despesas_financeiras' && grupo === 'DESPESAS FINANCEIRAS') match = true;
-        if (grupoSolicitado === 'outros' && grupo === 'OUTROS / NÃO CLASSIFICADOS') match = true;
-
-        if (match) {
+        if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
           detalhamento.push({
             data: item.date,
             nome: item.description || "Lançamento NIBO",
-            descricao: entry.nome || "Sub-categoria",
-            categoria: entry.nome || "Sem categoria",
+            descricao: entry.nome,
+            categoria: entry.nome,
             centro_costo: item.costCenter?.name || "-",
             valor: entry.valor * -1
           });
         }
       }
     } else {
-      if (!catNome) continue;
-      const grupo = mapearCategoria(catNome, planoContas);
-      let match = false;
-      if (grupoSolicitado === 'receitas_operacionais' && grupo === 'RECEITAS OPERACIONAIS') match = true;
-      if (grupoSolicitado === 'impostos_vendas' && grupo === 'IMPOSTOS SOBRE VENDAS') match = true;
-      if (grupoSolicitado === 'custos_operacionais' && grupo === 'CUSTOS OPERACIONAIS') match = true;
-      if (grupoSolicitado === 'despesas_adm' && grupo === 'DESPESAS ADMINISTRATIVAS') match = true;
-      if (grupoSolicitado === 'despesas_comerciais' && grupo === 'DESPESAS COMERCIAIS') match = true;
-      if (grupoSolicitado === 'fci' && grupo === 'FCI') match = true;
-      if (grupoSolicitado === 'fcf' && grupo === 'FCF') match = true;
-      if (grupoSolicitado === 'despesas_financeiras' && grupo === 'DESPESAS FINANCEIRAS') match = true;
-      if (grupoSolicitado === 'outros' && grupo === 'OUTROS / NÃO CLASSIFICADOS') match = true;
-
-      if (match) {
+      if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
         detalhamento.push({
           data: item.date,
           nome: item.description || "Lançamento NIBO",
           descricao: "Lançamento direto",
-          categoria: catNome || "Sem categoria",
+          categoria: catNome,
           centro_costo: item.costCenter?.name || "-",
           valor: parseFloat(item.value || 0) * -1
         });
