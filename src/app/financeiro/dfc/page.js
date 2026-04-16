@@ -165,13 +165,14 @@ function DFCContent() {
                                     <th className="p-4 border-b border-white/10">Nome</th>
                                     <th className="p-4 border-b border-white/10">Descrição</th>
                                     <th className="p-4 border-b border-white/10">Categoria</th>
+                                    <th className="p-4 border-b border-white/10">Centro de Custo</th>
                                     <th className="p-4 border-b border-white/10 text-right">Valor</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {detalhamento.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="p-8 text-center text-xs text-white/30 italic">
+                                        <td colSpan="6" className="p-8 text-center text-xs text-white/30 italic">
                                             Nenhum lançamento encontrado para este filtro.
                                         </td>
                                     </tr>
@@ -188,6 +189,7 @@ function DFCContent() {
                                                     {item.categoria || '—'}
                                                 </span>
                                             </td>
+                                            <td className="p-4 text-sm text-white/50">{item.centro_costo || '—'}</td>
                                             <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
                                                 {formatarMoeda(item.valor || 0)}
                                             </td>
@@ -198,7 +200,7 @@ function DFCContent() {
                             {detalhamento.length > 0 && (
                                 <tfoot>
                                     <tr className="bg-acelerar-light-blue/10 font-bold border-t border-white/10">
-                                        <td colSpan="4" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
+                                        <td colSpan="5" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
                                         <td className={`p-4 text-sm text-right font-bold ${detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0) < 0 ? 'text-red-400' : 'text-white'}`}>
                                             {formatarMoeda(detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0))}
                                         </td>
@@ -213,67 +215,47 @@ function DFCContent() {
     };
 
     return (
-        <div className="space-y-8">
-            {/* ABAS DE EMPRESA */}
-            <div className="border-b border-white/10 flex gap-0 overflow-x-auto">
-                {['Victec', 'VMC Tech'].map(empresa => (
-                    <EmpresaTab
-                        key={empresa}
-                        nome={empresa}
-                        isActive={empresaAtiva === empresa}
-                        onClick={() => setEmpresaAtiva(empresa)}
-                    />
-                ))}
-            </div>
-
-            {/* CONTROLES */}
-            {empresaAtiva && (
-                <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
+            <div className="flex items-center justify-between border-b border-white/10">
+                <div className="flex">
+                    <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
+                    <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
+                    <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
+                </div>
+                {empresaAtiva && (
                     <div className="flex items-center gap-4">
-                        <label className="text-sm text-white/60">Ano:</label>
-                        <select
-                            value={anoAtivo}
-                            onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
-                            className="bg-white/10 border border-white/20 rounded px-3 py-2 text-white text-sm"
-                        >
-                            {[2024, 2025, 2026].map(ano => <option key={ano} value={ano}>{ano}</option>)}
+                        <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+                            <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
+                            <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
+                        </div>
+                        <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
+                            <option value={2026}>Ano: 2026</option>
                         </select>
                     </div>
-                    <div className="flex gap-2">
-                        {['Mensal', 'Acumulado'].map(v => (
-                            <button
-                                key={v}
-                                onClick={() => setVisao(v)}
-                                className={`px-4 py-2 rounded text-xs font-semibold transition-all ${
-                                    visao === v
-                                    ? 'bg-acelerar-light-blue text-white'
-                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                                }`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* CONTEÚDO */}
+                )}
+            </div>
             {!empresaAtiva ? (
-                <div className="flex items-center justify-center h-64 rounded-xl border border-dashed border-white/10 bg-white/5">
-                    <p className="text-xs text-white/30 font-medium uppercase tracking-widest">
-                        Selecione uma empresa para visualizar o DFC.
-                    </p>
-                </div>
-            ) : loading ? (
-                <div className="flex flex-col items-center justify-center h-64 space-y-3">
-                    <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Carregando dados...</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
+                    <p className="text-sm font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
                 </div>
             ) : (
-                <>
-                    {renderTabelaMensal()}
-                    {renderDetalhamento()}
-                </>
+                <div className="flex-1 space-y-6">
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                            <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Processando dados do Nibo via Supabase...</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 animate-in fade-in duration-500">
+                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <span className="w-1.5 h-6 bg-acelerar-light-blue rounded-full"></span>
+                                Demonstrativo de Fluxo de Caixa - {empresaAtiva}
+                            </h3>
+                            {renderTabelaMensal()}
+                            {renderDetalhamento()}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -281,7 +263,11 @@ function DFCContent() {
 
 export default function DFCPage() {
     return (
-        <Suspense fallback={<div className="text-white">Carregando...</div>}>
+        <Suspense fallback={
+            <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 items-center justify-center">
+                <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        }>
             <DFCContent />
         </Suspense>
     );
