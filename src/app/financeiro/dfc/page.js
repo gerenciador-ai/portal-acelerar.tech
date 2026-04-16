@@ -5,7 +5,7 @@ import Image from 'next/image';
 function EmpresaTab({ nome, logo, isActive, onClick }) {
     // Ajuste específico para o logo da VMC Tech que é mais largo
     const isVMC = nome === 'VMC Tech';
-    const imgWidth = isVMC ? 100 : 56; // Aumentado para 100 para dar o destaque necessário
+    const imgWidth = isVMC ? 300 : 56; // Aumentado para 100 para dar o destaque necessário
     const imgHeight = 56;
 
     return (
