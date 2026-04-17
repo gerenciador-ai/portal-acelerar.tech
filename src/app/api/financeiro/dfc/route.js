@@ -12,6 +12,9 @@ const NIBO_BASE = "https://api.nibo.com.br/empresas/v1";
 const EMPRESAS = [
   { nome: "Victec", apiKeyEnv: "NIBO_API_KEY_VICTEC" },
   { nome: "VMC Tech", apiKeyEnv: "NIBO_API_KEY_VMCTECH" },
+  { nome: "GRT", apiKeyEnv: "NIBO_API_KEY_GRT" },
+  { nome: "Bllog", apiKeyEnv: "NIBO_API_KEY_BLLOG" },
+  { nome: "M3", apiKeyEnv: "NIBO_API_KEY_M3" },
 ];
 
 // ── Busca paginada mensal ─────────────────────────────────────────────────────
@@ -50,12 +53,12 @@ function buildScheduleMap(schedules) {
 
     if (cats.length > 0) {
       const entries = cats
-        .filter((c) => c.categoryName && parseFloat(c.value || 0) > 0)
-        .map((c) => ({
-          nome: (c.categoryName || "").trim(),
-          valor: parseFloat(c.value || 0),
-          tipo: (c.type || "in").toLowerCase(),
-        }));
+      .filter((c) => c.categoryName && parseFloat(c.value || 0) > 0)
+      .map((c) => ({
+        nome: (c.categoryName || "").trim(),
+        valor: parseFloat(c.value || 0),
+        tipo: (c.type || "in").toLowerCase(),
+      }));
       map[sid] = entries.length > 0 ? entries : [{ nome: mainCat, valor: paidValue, tipo: "in" }];
     } else {
       map[sid] = [{ nome: mainCat, valor: paidValue, tipo: "in" }];
@@ -164,10 +167,10 @@ const LINHAS_DFC = [
 async function buscarSaldoInicial(empresaNome) {
   try {
     const { data, error } = await supabase
-      .from("saldos_iniciais_dfc")
-      .select("saldo_inicial_2026")
-      .eq("empresa_nome", empresaNome)
-      .single();
+    .from("saldos_iniciais_dfc")
+    .select("saldo_inicial_2026")
+    .eq("empresa_nome", empresaNome)
+    .single();
 
     if (error || !data) {
       console.warn(`Saldo inicial não encontrado para ${empresaNome}, usando 0`);
@@ -202,8 +205,8 @@ export async function GET(request) {
 
   // Carregar plano de contas do Supabase
   const { data: planoContas, error: planoError } = await supabase
-    .from("plano_contas_dfc")
-    .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
+  .from("plano_contas_dfc")
+  .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
 
   if (planoError) {
     return NextResponse.json({ error: "Erro ao carregar plano de contas" }, { status: 500 });
