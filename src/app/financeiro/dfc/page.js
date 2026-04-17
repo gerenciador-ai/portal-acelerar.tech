@@ -1,90 +1,163 @@
 "use client";
-import { useState, useEffect, Suspense } from 'react';
+
+import { createBrowserClient } from '@supabase/ssr';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { useState, useEffect, Suspense } from 'react';
+import { 
+  TrendingUp, 
+  ShieldCheck, 
+  Users, 
+  LayoutDashboard, 
+  FileText, 
+  PieChart, 
+  ArrowLeft,
+  Calendar,
+  ChevronDown,
+  Download,
+  Filter,
+  Search,
+  X
+} from 'lucide-react';
 
+// Componente para as abas de empresas (Logos apenas)
 function EmpresaTab({ nome, logo, isActive, onClick }) {
-  const isVMC = nome === 'VMC Tech';
-  const containerWidth = isVMC ? 'w-40' : 'w-28';
+    const isVMC = nome === 'VMC Tech';
+    return (
+        <button 
+            onClick={onClick}
+            className={`relative flex items-center justify-center px-8 py-4 transition-all duration-200 border-b-2 ${
+                isActive 
+                ? 'border-acelerar-light-blue bg-white/5' 
+                : 'border-transparent hover:bg-white/5'
+            }`}
+        >
+            {logo && (
+                <div className={`relative ${isVMC ? 'w-40' : 'w-24'} h-14 transition-all duration-200 ${isActive ? 'opacity-100 scale-110' : 'opacity-50 hover:opacity-80'}`}>
+                    <Image 
+                        src={logo} 
+                        alt={nome} 
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            )}
+        </button>
+    );
+}
 
+// Função de formatação otimizada
+const formatarMoedaOtimizado = (valor) => {
+  if (valor === null || valor === undefined) return "—";
+  const absValor = Math.abs(valor);
+  
+  // Se for entre 0,01 e 0,99, mantém decimais
+  // Se for >= 1,00, suprime decimais
+  const options = {
+    minimumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+    maximumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+  };
+
+  const formatado = new Intl.NumberFormat('pt-BR', options).format(valor);
+  return formatado;
+};
+
+function LancamentosTable({ lancamentos, onClose, grupo }) {
   return (
-    <button 
-      onClick={onClick}
-      className={`relative flex items-center justify-center h-20 ${containerWidth} transition-all duration-200 border-b-2 ${
-        isActive 
-        ? 'border-acelerar-light-blue bg-white/5' 
-        : 'border-transparent hover:bg-white/5'
-      }`}
-    >
-      {logo && (
-        <div className="relative w-full h-full p-3">
-          <Image 
-            src={logo} 
-            alt={nome} 
-            fill
-            className={`transition-opacity duration-200 object-contain p-2 ${isActive ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority
-          />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-acelerar-dark-blue border border-white/10 rounded-2xl w-full max-w-5xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="p-6 border-b border-white/10 flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold text-white">Detalhamento de Lançamentos</h3>
+            <p className="text-acelerar-light-blue text-sm font-medium mt-1">{grupo}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+            <X className="text-white/70" />
+          </button>
         </div>
-      )}
-    </button>
+        
+        <div className="overflow-auto flex-1 p-6">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="text-acelerar-light-blue text-[11px] uppercase tracking-wider border-b border-white/10">
+                <th className="pb-4 font-semibold">Data</th>
+                <th className="pb-4 font-semibold">Nome</th>
+                <th className="pb-4 font-semibold">Descrição</th>
+                <th className="pb-4 font-semibold">Categoria</th>
+                <th className="pb-4 font-semibold text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="text-[12px]">
+              {lancamentos.map((l, i) => (
+                <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="py-3 text-white/70">{l.data}</td>
+                  <td className="py-3 text-white font-medium">{l.nome}</td>
+                  <td className="py-3 text-white/60">{l.descricao}</td>
+                  <td className="py-3 text-white/60">{l.categoria}</td>
+                  <td className={`py-3 text-right font-bold ${l.valor < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {formatarMoedaOtimizado(l.valor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-white/5 font-bold">
+                <td colSpan="4" className="py-4 px-4 text-white">TOTAL</td>
+                <td className={`py-4 px-4 text-right ${lancamentos.reduce((acc, curr) => acc + curr.valor, 0) < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {formatarMoedaOtimizado(lancamentos.reduce((acc, curr) => acc + curr.valor, 0))}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function DFCContent() {
-  const [empresaAtiva, setEmpresaAtiva] = useState(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [loading, setLoading] = useState(true);
   const [dados, setDados] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [visao, setVisao] = useState('Mensal');
-  const [anoAtivo, setAnoAtivo] = useState(2026);
-
-  // ESTADOS DO DETALHAMENTO
-  const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null, grupoLabel: null });
-  const [detalhamento, setDetalhamento] = useState([]);
+  const [empresaAtiva, setEmpresaAtiva] = useState('Consolidado');
+  const [anoAtivo, setAnoAtivo] = useState(new Date().getFullYear());
+  const [detalhamento, setDetalhamento] = useState(null);
   const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
 
+  const empresas = [
+    { nome: 'Consolidado', logo: '/logo_acelerar_login.png' },
+    { nome: 'VMC Tech', logo: '/logo_vmctech.png' },
+    { nome: 'Victec', logo: '/logo_victec.png' }
+  ];
+
+  const anos = [2024, 2025, 2026];
+
   useEffect(() => {
-    if (empresaAtiva && empresaAtiva !== 'Consolidado') {
-      carregarDados();
-    }
+    fetchDados();
   }, [empresaAtiva, anoAtivo]);
 
-  const carregarDados = async () => {
+  const fetchDados = async () => {
     setLoading(true);
-    setDados(null);
     try {
-      const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}`);
+      const res = await fetch(`/api/financeiro/dfc?empresa=${empresaAtiva}&ano=${anoAtivo}`);
       const data = await res.json();
       setDados(data);
     } catch (error) {
-      console.error('Erro ao carregar DFC:', error);
+      console.error("Erro ao buscar DFC:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatarMoeda = (valor) => {
-    if (valor === null || valor === undefined) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
-  };
-
-  // FUNÇÃO DE CARREGAMENTO DO DETALHAMENTO
-  const carregarDetalhamento = async (mesIdx, grupoKey, grupoLabel) => {
-    if (selecionado.mesIdx === mesIdx && selecionado.grupoKey === grupoKey) {
-      setSelecionado({ mesIdx: null, grupoKey: null, grupoLabel: null });
-      setDetalhamento([]);
-      return;
-    }
-    setSelecionado({ mesIdx, grupoKey, grupoLabel });
+  const handleVerDetalhamento = async (grupo, mesIndex) => {
     setLoadingDetalhamento(true);
-    setDetalhamento([]);
     try {
-      const mes = mesIdx + 1;
-      const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&grupo=${encodeURIComponent(grupoKey)}`);
+      const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${empresaAtiva}&ano=${anoAtivo}&mes=${mesIndex + 1}&grupo=${encodeURIComponent(grupo)}`);
       const data = await res.json();
-      setDetalhamento(Array.isArray(data) ? data : []);
+      setDetalhamento({ grupo, lancamentos: data });
     } catch (error) {
-      console.error('Erro ao carregar detalhamento:', error);
+      console.error("Erro ao buscar detalhamento:", error);
     } finally {
       setLoadingDetalhamento(false);
     }
@@ -92,222 +165,188 @@ function DFCContent() {
 
   const renderTabelaMensal = () => {
     if (!dados || !dados.matriz) return null;
-    const meses = dados.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-    const saldoInicial = dados.saldoInicial || 0;
 
-    // CÁLCULO EM CASCATA DOS SALDOS
-    let saldoAcumulado = saldoInicial;
-    const linhasSaldos = {
-      inicial: { key: 'SALDO_INICIAL', label: 'SALDO INICIAL', valores: [] },
-      operacional: { key: '(=) SALDO OPERACIONAL LÍQUIDO', label: '(=) SALDO OPERACIONAL LÍQUIDO', valores: [] },
-      final: { key: '(=) SALDO LÍQUIDO DO PERÍODO', label: '(=) SALDO LÍQUIDO DO PERÍODO', valores: [] }
-    };
+    // Lógica de cálculo em cascata dos saldos
+    let saldoAcumulado = dados.saldoInicial || 0;
+    const linhaSaldoInicial = { label: 'SALDO INICIAL', valores: [] };
+    const linhaSaldoOperacional = { label: '(=) SALDO OPERACIONAL LÍQUIDO', valores: [] };
+    const linhaSaldoFinal = { label: '(=) SALDO LÍQUIDO DO PERÍODO', valores: [] };
 
-    // Encontra a linha de resultado original do NIBO (última linha calculada)
-    const linhaResultadoOriginal = dados.matriz.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
+    const linhaResultadoNibo = dados.matriz.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
 
-    if (linhaResultadoOriginal) {
-      linhaResultadoOriginal.valores.forEach((valorMesNibo) => {
-        // Saldo Inicial do mês
-        linhasSaldos.inicial.valores.push(saldoAcumulado);
-
-        // Saldo Operacional Líquido (resultado do mês vindo do NIBO)
-        linhasSaldos.operacional.valores.push(valorMesNibo);
-
-        // Saldo Líquido do Período (Saldo Inicial + Saldo Operacional)
-        const novoSaldoFinal = saldoAcumulado + valorMesNibo;
-        linhasSaldos.final.valores.push(novoSaldoFinal);
-
-        // O saldo final deste mês é o inicial do próximo
+    if (linhaResultadoNibo) {
+      linhaResultadoNibo.valores.forEach((valorMes) => {
+        linhaSaldoInicial.valores.push(saldoAcumulado);
+        linhaSaldoOperacional.valores.push(valorMes);
+        const novoSaldoFinal = saldoAcumulado + valorMes;
+        linhaSaldoFinal.valores.push(novoSaldoFinal);
         saldoAcumulado = novoSaldoFinal;
       });
     }
 
-    // Cria a matriz final para renderização
-    const matrizFinal = [
-      linhasSaldos.inicial, // SALDO INICIAL no topo
-      ...dados.matriz.filter(l => l.key !== '(=) SALDO LÍQUIDO DO PERÍODO'), // Todas as linhas originais, exceto a última
-      linhasSaldos.operacional, // SALDO OPERACIONAL LÍQUIDO (renomeado)
-      linhasSaldos.final // SALDO LÍQUIDO DO PERÍODO (novo cálculo)
-    ];
-
     return (
-      <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-white/5 text-[10px] text-white/50 uppercase font-bold tracking-widest">
-              <th className="p-4 border-b border-white/10">Categoria</th>
-              {meses.map(m => <th key={m} className="p-4 border-b border-white/10 text-right">{m}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {matrizFinal.map((linha) => {
-              const isTotal = linha.key.startsWith('(=)') || linha.key === 'SALDO_INICIAL';
-              return (
-                <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
-                  <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
-                  {linha.valores.map((valor, mIdx) => {
-                    const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
-                    // Apenas linhas que não são de saldo podem ser clicadas para detalhamento
-                    const podeClicar = !isTotal || linha.key.startsWith('(=)') && !linha.key.includes('SALDO');
-                    
-                    return (
-                      <td key={mIdx} className="p-0 relative group">
-                        <button
-                          onClick={() => podeClicar && carregarDetalhamento(mIdx, linha.key, linha.label)}
-                          disabled={!podeClicar}
-                          className={`w-full h-full p-4 text-sm text-right transition-all duration-150 focus:outline-none
-                            ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
-                            ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : podeClicar ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}
-                          `}
-                        >
-                          {formatarMoeda(valor || 0)}
-                        </button>
-                        {podeClicar && (
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-50 pointer-events-none">
-                            <div className="bg-gray-900 text-white/80 text-[10px] py-1 px-2 rounded shadow-xl border border-white/10 whitespace-nowrap">
-                              Exibir detalhamento
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+      <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <PieChart className="text-acelerar-light-blue w-5 h-5" />
+            Demonstrativo de Fluxo de Caixa (DFC) - {anoAtivo}
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-acelerar-dark-blue/50 text-acelerar-light-blue text-[10px] uppercase tracking-tighter border-b border-white/10">
+                <th className="p-3 font-bold sticky left-0 bg-acelerar-dark-blue z-10 min-w-[200px]">Descrição</th>
+                {dados.meses.map(mes => (
+                  <th key={mes} className="p-3 text-center font-bold min-w-[80px]">{mes}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="text-[11px]">
+              {/* LINHA: SALDO INICIAL */}
+              <tr className="bg-acelerar-light-blue/10 font-bold border-b border-white/10">
+                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">SALDO INICIAL</td>
+                {linhaSaldoInicial.valores.map((v, i) => (
+                  <td key={i} className="p-3 text-right text-white">{formatarMoedaOtimizado(v)}</td>
+                ))}
+              </tr>
 
-  const renderDetalhamento = () => {
-    const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
-    const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
-    const nomeGrupo = selecionado.grupoLabel;
+              {dados.matriz.map((linha, idx) => {
+                // Pula a linha de saldo original do NIBO para não duplicar
+                if (linha.key === '(=) SALDO LÍQUIDO DO PERÍODO') return null;
 
-    return (
-      <div className="space-y-4 animate-in fade-in duration-300">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-yellow-400 rounded-full"></span>
-          Detalhamento dos Lançamentos
-          {nomeMes && nomeGrupo && (
-            <span className="ml-2 text-xs font-normal text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-              {nomeGrupo} • {nomeMes}/{anoAtivo}
-            </span>
-          )}
-        </h3>
-
-        {!selecionado.mesIdx && selecionado.mesIdx !== 0 ? (
-          <div className="flex items-center justify-center h-32 rounded-xl border border-dashed border-white/10 bg-white/5">
-            <p className="text-xs text-white/30 font-medium uppercase tracking-widest">
-              Para exibir o detalhamento, selecione o mês e a categoria que deseja detalhar no quadro acima.
-            </p>
-          </div>
-        ) : loadingDetalhamento ? (
-          <div className="flex flex-col items-center justify-center h-32 space-y-3">
-            <div className="w-6 h-6 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Buscando lançamentos no Nibo...</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white/5 text-[10px] text-white/50 uppercase font-bold tracking-widest">
-                  <th className="p-4 border-b border-white/10">Data</th>
-                  <th className="p-4 border-b border-white/10">Nome</th>
-                  <th className="p-4 border-b border-white/10">Descrição</th>
-                  <th className="p-4 border-b border-white/10">Categoria</th>
-                  <th className="p-4 border-b border-white/10 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detalhamento.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="p-8 text-center text-xs text-white/30 italic">
-                      Nenhum lançamento encontrado para este filtro.
+                const isCalculado = linha.tipo === 'calculado';
+                return (
+                  <tr 
+                    key={idx} 
+                    className={`border-b border-white/5 transition-colors hover:bg-white/5 ${isCalculado ? 'bg-white/5 font-bold' : ''}`}
+                  >
+                    <td className={`p-3 sticky left-0 z-10 ${isCalculado ? 'bg-acelerar-dark-blue/90 text-acelerar-light-blue' : 'bg-acelerar-dark-blue text-white/80'}`}>
+                      {linha.label}
                     </td>
+                    {linha.valores.map((v, i) => (
+                      <td 
+                        key={i} 
+                        onClick={() => !isCalculado && v !== 0 && handleVerDetalhamento(linha.key, i)}
+                        className={`p-3 text-right cursor-pointer hover:text-acelerar-light-blue transition-colors ${v < 0 ? 'text-red-400' : v > 0 ? 'text-emerald-400' : 'text-white/30'}`}
+                      >
+                        {formatarMoedaOtimizado(v)}
+                      </td>
+                    ))}
                   </tr>
-                ) : (
-                  detalhamento.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
-                      <td className="p-4 text-sm text-white/60 font-mono">
-                        {item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                      </td>
-                      <td className="p-4 text-sm text-white/80 font-medium">{item.nome || '—'}</td>
-                      <td className="p-4 text-sm text-white/50 italic">{item.descricao || '—'}</td>
-                      <td className="p-4 text-sm">
-                        <span className="text-[10px] text-white/60 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
-                          {item.categoria || '—'}
-                        </span>
-                      </td>
-                      <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
-                        {formatarMoeda(item.valor || 0)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {detalhamento.length > 0 && (
-                <tfoot>
-                  <tr className="bg-acelerar-light-blue/10 font-bold border-t border-white/10">
-                    <td colSpan="4" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
-                    <td className={`p-4 text-sm text-right font-bold ${detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0) < 0 ? 'text-red-400' : 'text-white'}`}>
-                      {formatarMoeda(detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0))}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        )}
+                );
+              })}
+
+              {/* LINHA: SALDO OPERACIONAL LÍQUIDO */}
+              <tr className="bg-white/10 font-bold border-t-2 border-white/20">
+                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">(=) SALDO OPERACIONAL LÍQUIDO</td>
+                {linhaSaldoOperacional.valores.map((v, i) => (
+                  <td key={i} className={`p-3 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {formatarMoedaOtimizado(v)}
+                  </td>
+                ))}
+              </tr>
+
+              {/* LINHA: SALDO LÍQUIDO DO PERÍODO (FINAL) */}
+              <tr className="bg-acelerar-light-blue/20 font-black border-t border-white/10">
+                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-white uppercase">(=) SALDO LÍQUIDO DO PERÍODO</td>
+                {linhaSaldoFinal.valores.map((v, i) => (
+                  <td key={i} className={`p-3 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {formatarMoedaOtimizado(v)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
-      <div className="flex items-center justify-between border-b border-white/10">
-        <div className="flex gap-2">
-          <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
-          <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
-          <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
-        </div>
-        {empresaAtiva && (
-          <div className="flex items-center gap-4">
-            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
-              <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
+    <div className="min-h-screen bg-acelerar-dark-blue text-white font-sans selection:bg-acelerar-light-blue/30">
+      {/* Background Decorativo */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
+        <div className="absolute -top-[10%] -right-[10%] w-[50%] h-[50%] bg-acelerar-light-blue/20 blur-[120px] rounded-full" />
+        <div className="absolute -bottom-[10%] -left-[10%] w-[50%] h-[50%] bg-acelerar-light-blue/10 blur-[120px] rounded-full" />
+      </div>
+
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-acelerar-dark-blue/80 backdrop-blur-md border-b border-white/10">
+        <div className="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <div className="cursor-pointer transition-transform hover:scale-105" onClick={() => router.push('/dashboard')}>
+              <Image src="/logo_acelerar_login.png" alt="Acelerar.tech" width={150} height={40} className="object-contain" />
             </div>
-            <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
-              <option value={2026}>Ano: 2026</option>
-            </select>
+            <nav className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+              <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all">
+                <LayoutDashboard size={18} /> Dashboard
+              </button>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-acelerar-light-blue text-acelerar-dark-blue shadow-lg shadow-acelerar-light-blue/20">
+                <FileText size={18} /> DFC
+              </button>
+            </nav>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+              <Calendar className="text-acelerar-light-blue w-4 h-4" />
+              <select 
+                value={anoAtivo} 
+                onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
+                className="bg-transparent text-sm font-bold text-white focus:outline-none cursor-pointer"
+              >
+                {anos.map(ano => <option key={ano} value={ano} className="bg-acelerar-dark-blue">{ano}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="relative z-10 max-w-[1600px] mx-auto px-6 py-8">
+        {/* Seletor de Empresas */}
+        <div className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 mb-8 overflow-x-auto no-scrollbar">
+          {empresas.map((emp) => (
+            <EmpresaTab
+              key={emp.nome}
+              nome={emp.nome}
+              logo={emp.logo}
+              isActive={empresaAtiva === emp.nome}
+              onClick={() => setEmpresaAtiva(emp.nome)}
+            />
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-32">
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 border-4 border-acelerar-light-blue/20 rounded-full" />
+              <div className="absolute inset-0 border-4 border-acelerar-light-blue rounded-full border-t-transparent animate-spin" />
+            </div>
+            <p className="mt-6 text-acelerar-light-blue font-medium animate-pulse">Consolidando dados financeiros...</p>
+          </div>
+        ) : (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {renderTabelaMensal()}
           </div>
         )}
-      </div>
-      {!empresaAtiva ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
-          <p className="text-sm font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
-        </div>
-      ) : (
-        <div className="flex-1 space-y-6">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-64 space-y-4">
-              <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Processando dados do Nibo via Supabase...</p>
-            </div>
-          ) : (
-            <div className="space-y-4 animate-in fade-in duration-500">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-acelerar-light-blue rounded-full"></span>
-                Demonstrativo de Fluxo de Caixa - {empresaAtiva}
-              </h3>
-              {renderTabelaMensal()}
-              {renderDetalhamento()}
-            </div>
-          )}
+      </main>
+
+      {/* Modais */}
+      {detalhamento && (
+        <LancamentosTable 
+          lancamentos={detalhamento.lancamentos} 
+          grupo={detalhamento.grupo}
+          onClose={() => setDetalhamento(null)} 
+        />
+      )}
+
+      {loadingDetalhamento && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center">
+          <div className="bg-acelerar-dark-blue p-8 rounded-2xl border border-white/10 shadow-2xl text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-acelerar-light-blue mb-4" />
+            <p className="text-white font-medium">Buscando detalhes no NIBO...</p>
+          </div>
         </div>
       )}
     </div>
@@ -316,11 +355,7 @@ function DFCContent() {
 
 export default function DFCPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 items-center justify-center">
-        <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    }>
+    <Suspense fallback={<div>Carregando...</div>}>
       <DFCContent />
     </Suspense>
   );
