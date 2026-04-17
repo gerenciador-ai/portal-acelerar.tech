@@ -162,7 +162,7 @@ function DFCContent() {
                         <button
                           onClick={() => podeClicar && carregarDetalhamento(mIdx, linha.key, linha.label)}
                           disabled={!podeClicar}
-                          className={`w-full h-full p-4 text-sm text-right transition-all duration-150 focus:outline-none
+                          className={`w-full h-full p-4 text-[11px] text-right transition-all duration-150 focus:outline-none
                             ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
                             ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : podeClicar ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}
                           `}
