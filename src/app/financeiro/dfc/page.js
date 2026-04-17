@@ -46,7 +46,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
     );
 }
 
-// Função de formatação otimizada
+// Função de formatação otimizada (REMOVIDO R$, SUPRIMIDO DECIMAIS PARA >= 1.00)
 const formatarMoedaOtimizado = (valor) => {
   if (valor === null || valor === undefined) return "—";
   const absValor = Math.abs(valor);
@@ -79,7 +79,7 @@ function LancamentosTable({ lancamentos, onClose, grupo }) {
         <div className="overflow-auto flex-1 p-6">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="text-acelerar-light-blue text-[11px] uppercase tracking-wider border-b border-white/10">
+              <tr className="text-acelerar-light-blue text-xs uppercase tracking-wider border-b border-white/10">
                 <th className="pb-4 font-semibold">Data</th>
                 <th className="pb-4 font-semibold">Nome</th>
                 <th className="pb-4 font-semibold">Descrição</th>
@@ -87,14 +87,14 @@ function LancamentosTable({ lancamentos, onClose, grupo }) {
                 <th className="pb-4 font-semibold text-right">Valor</th>
               </tr>
             </thead>
-            <tbody className="text-[12px]">
+            <tbody>
               {lancamentos.map((l, i) => (
                 <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-3 text-white/70">{l.data}</td>
-                  <td className="py-3 text-white font-medium">{l.nome}</td>
-                  <td className="py-3 text-white/60">{l.descricao}</td>
-                  <td className="py-3 text-white/60">{l.categoria}</td>
-                  <td className={`py-3 text-right font-bold ${l.valor < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  <td className="py-3 text-white/70 text-sm">{l.data}</td>
+                  <td className="py-3 text-white font-medium text-sm">{l.nome}</td>
+                  <td className="py-3 text-white/60 text-sm">{l.descricao}</td>
+                  <td className="py-3 text-white/60 text-sm">{l.categoria}</td>
+                  <td className={`py-3 text-right font-bold text-sm ${l.valor < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                     {formatarMoedaOtimizado(l.valor)}
                   </td>
                 </tr>
@@ -195,19 +195,19 @@ function DFCContent() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-acelerar-dark-blue/50 text-acelerar-light-blue text-[10px] uppercase tracking-tighter border-b border-white/10">
-                <th className="p-3 font-bold sticky left-0 bg-acelerar-dark-blue z-10 min-w-[200px]">Descrição</th>
+              <tr className="bg-acelerar-dark-blue/50 text-acelerar-light-blue text-xs uppercase tracking-wider border-b border-white/10">
+                <th className="p-4 font-bold sticky left-0 bg-acelerar-dark-blue z-10 min-w-[250px]">Descrição</th>
                 {dados.meses.map(mes => (
-                  <th key={mes} className="p-3 text-center font-bold min-w-[80px]">{mes}</th>
+                  <th key={mes} className="p-4 text-center font-bold min-w-[100px]">{mes}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="text-[11px]">
+            <tbody>
               {/* LINHA: SALDO INICIAL */}
               <tr className="bg-acelerar-light-blue/10 font-bold border-b border-white/10">
-                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">SALDO INICIAL</td>
+                <td className="p-4 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">SALDO INICIAL</td>
                 {linhaSaldoInicial.valores.map((v, i) => (
-                  <td key={i} className="p-3 text-right text-white">{formatarMoedaOtimizado(v)}</td>
+                  <td key={i} className="p-4 text-right text-white">{formatarMoedaOtimizado(v)}</td>
                 ))}
               </tr>
 
@@ -221,14 +221,14 @@ function DFCContent() {
                     key={idx} 
                     className={`border-b border-white/5 transition-colors hover:bg-white/5 ${isCalculado ? 'bg-white/5 font-bold' : ''}`}
                   >
-                    <td className={`p-3 sticky left-0 z-10 ${isCalculado ? 'bg-acelerar-dark-blue/90 text-acelerar-light-blue' : 'bg-acelerar-dark-blue text-white/80'}`}>
+                    <td className={`p-4 sticky left-0 z-10 ${isCalculado ? 'bg-acelerar-dark-blue/90 text-acelerar-light-blue' : 'bg-acelerar-dark-blue text-white/80'}`}>
                       {linha.label}
                     </td>
                     {linha.valores.map((v, i) => (
                       <td 
                         key={i} 
                         onClick={() => !isCalculado && v !== 0 && handleVerDetalhamento(linha.key, i)}
-                        className={`p-3 text-right cursor-pointer hover:text-acelerar-light-blue transition-colors ${v < 0 ? 'text-red-400' : v > 0 ? 'text-emerald-400' : 'text-white/30'}`}
+                        className={`p-4 text-right cursor-pointer hover:text-acelerar-light-blue transition-colors ${v < 0 ? 'text-red-400' : v > 0 ? 'text-emerald-400' : 'text-white/30'}`}
                       >
                         {formatarMoedaOtimizado(v)}
                       </td>
@@ -239,9 +239,9 @@ function DFCContent() {
 
               {/* LINHA: SALDO OPERACIONAL LÍQUIDO */}
               <tr className="bg-white/10 font-bold border-t-2 border-white/20">
-                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">(=) SALDO OPERACIONAL LÍQUIDO</td>
+                <td className="p-4 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-acelerar-light-blue">(=) SALDO OPERACIONAL LÍQUIDO</td>
                 {linhaSaldoOperacional.valores.map((v, i) => (
-                  <td key={i} className={`p-3 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  <td key={i} className={`p-4 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                     {formatarMoedaOtimizado(v)}
                   </td>
                 ))}
@@ -249,9 +249,9 @@ function DFCContent() {
 
               {/* LINHA: SALDO LÍQUIDO DO PERÍODO (FINAL) */}
               <tr className="bg-acelerar-light-blue/20 font-black border-t border-white/10">
-                <td className="p-3 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-white uppercase">(=) SALDO LÍQUIDO DO PERÍODO</td>
+                <td className="p-4 sticky left-0 bg-acelerar-dark-blue/90 z-10 text-white uppercase">(=) SALDO LÍQUIDO DO PERÍODO</td>
                 {linhaSaldoFinal.valores.map((v, i) => (
-                  <td key={i} className={`p-3 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  <td key={i} className={`p-4 text-right ${v < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                     {formatarMoedaOtimizado(v)}
                   </td>
                 ))}
@@ -269,6 +269,17 @@ function DFCContent() {
       <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-20">
         <div className="absolute -top-[10%] -right-[10%] w-[50%] h-[50%] bg-acelerar-light-blue/20 blur-[120px] rounded-full" />
         <div className="absolute -bottom-[10%] -left-[10%] w-[50%] h-[50%] bg-acelerar-light-blue/10 blur-[120px] rounded-full" />
+      </div>
+
+      {/* Marca d'água da Acelerar */}
+      <div className="fixed inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] z-0">
+        <Image 
+          src="/marca-dagua-acelerar.webp" 
+          alt="Watermark" 
+          width={800} 
+          height={800} 
+          className="object-contain"
+        />
       </div>
 
       {/* Header */}
