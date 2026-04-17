@@ -64,8 +64,14 @@ function DFCContent() {
   };
 
   const formatarMoeda = (valor) => {
-    if (valor === null || valor === undefined) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
+    if (valor === null || valor === undefined) return "—";
+    const absValor = Math.abs(valor);
+    const options = {
+      minimumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+      maximumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+      useGrouping: true,
+    };
+    return new Intl.NumberFormat('pt-BR', options).format(valor);
   };
 
   // FUNÇÃO DE CARREGAMENTO DO DETALHAMENTO
