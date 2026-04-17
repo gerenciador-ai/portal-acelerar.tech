@@ -160,6 +160,27 @@ const LINHAS_DFC = [
   { key: "(=) SALDO LÍQUIDO DO PERÍODO", label: "(=) SALDO LÍQUIDO DO PERÍODO", tipo: "calculado" },
 ];
 
+// ── Buscar saldo inicial do Supabase ──────────────────────────────────────────
+async function buscarSaldoInicial(empresaNome) {
+  try {
+    const { data, error } = await supabase
+      .from("saldos_iniciais_dfc")
+      .select("saldo_inicial_2026")
+      .eq("empresa_nome", empresaNome)
+      .single();
+
+    if (error || !data) {
+      console.warn(`Saldo inicial não encontrado para ${empresaNome}, usando 0`);
+      return 0;
+    }
+
+    return parseFloat(data.saldo_inicial_2026) || 0;
+  } catch (error) {
+    console.error(`Erro ao buscar saldo inicial para ${empresaNome}:`, error);
+    return 0;
+  }
+}
+
 // ── Handler principal ─────────────────────────────────────────────────────────
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -242,10 +263,14 @@ export async function GET(request) {
     set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
   }
 
+  // ── INTEGRAÇÃO CIRÚRGICA: Buscar saldo inicial e retornar ────────────────────
+  const saldoInicial = await buscarSaldoInicial(empresa.nome);
+
   return NextResponse.json({
     empresa: empresa.nome,
     ano,
     meses,
     matriz,
+    saldoInicial, // ← Adicionado: saldo inicial do Supabase
   });
 }
