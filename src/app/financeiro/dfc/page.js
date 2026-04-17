@@ -151,7 +151,7 @@ function DFCContent() {
               const isTotal = linha.key.startsWith('(=)') || linha.key === 'SALDO_INICIAL';
               return (
                 <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
-                  <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
+                  <td className={`p-4 text-[11px] ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                   {linha.valores.map((valor, mIdx) => {
                     const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
                     // Apenas linhas que não são de saldo podem ser clicadas para detalhamento
