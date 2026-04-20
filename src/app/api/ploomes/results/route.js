@@ -45,12 +45,26 @@ function processDeal(deal, type) {
         date = getProp(FIELDS.DATA_CANCELAMENTO)?.DateTimeValue || deal.FinishDate;
     }
     if (!date) return null;
+
+    // Tenta extrair o produto do card atual
+    let produto = getProp(FIELDS.PRODUTO)?.ObjectValueName || getProp(FIELDS.PRODUTO)?.ValueName;
+
+    // Se for Churn e o produto for N/A, tenta buscar na última venda ganha anexada ao contato (Deep Expand)
+    if (type === 'Churn' && (!produto || produto === 'N/A')) {
+        const lastWonDeal = deal.Contact?.Deals?.[0];
+        if (lastWonDeal) {
+            const lastProps = lastWonDeal.OtherProperties || [];
+            produto = lastProps.find(p => p.FieldId === FIELDS.PRODUTO)?.ObjectValueName || 
+                      lastProps.find(p => p.FieldId === FIELDS.PRODUTO)?.ValueName;
+        }
+    }
+
     return {
         id: deal.Id, contactId: deal.ContactId, statusId: deal.StatusId, cliente: deal.Title,
         cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date), vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A', 
-        produto: getProp(FIELDS.PRODUTO)?.ObjectValueName || getProp(FIELDS.PRODUTO)?.ValueName || 'N/A',
+        produto: produto || 'N/A',
         mrr: getProp(FIELDS.MRR)?.DecimalValue || 0, adesao: (getProp(FIELDS.ADESAO_S)?.DecimalValue || 0) + (getProp(FIELDS.ADESAO_R)?.DecimalValue || 0),
         upsell: getProp(FIELDS.UPSELL)?.DecimalValue || 0, status: type,
     };
@@ -64,19 +78,21 @@ export async function GET(request) {
     if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
+        // A mágica acontece aqui: Expandimos o contato e, dentro dele, buscamos a última venda ganha histórica (StatusId eq 2)
+        const contactExpand = 'Contact($select=Id,Name,CNPJ,CPF;$expand=Deals($filter=StatusId eq 2;$orderby=FinishDate desc;$top=1;$expand=OtherProperties))';
+        
         const [vendasData, churnData] = await Promise.all([
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`),
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`)
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,${contactExpand}`),
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,${contactExpand}`)
         ]);
 
         const allVendasProcessed = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        // Mapa de referência para preencher dados do Churn a partir da Venda original
+        // Mapa de referência para preencher MRR, Vendedor e SDR do Churn a partir das vendas do período atual
         const dataMap = new Map();
         for (const venda of allVendasProcessed) {
             if (venda.contactId && venda.statusId === 2) {
-                // Mantém a venda mais recente de cada contato como referência
                 if (!dataMap.has(venda.contactId) || new Date(venda.data) > new Date(dataMap.get(venda.contactId).data)) {
                     dataMap.set(venda.contactId, { 
                         mrr: venda.mrr, 
@@ -97,7 +113,6 @@ export async function GET(request) {
                     mrr: originalData.mrr, 
                     vendedor: originalData.vendedor, 
                     sdr: originalData.sdr,
-                    // Se o produto no card de Churn for N/A, herda o produto da venda original
                     produto: (churn.produto === 'N/A' || !churn.produto) ? originalData.produto : churn.produto
                 };
             }
