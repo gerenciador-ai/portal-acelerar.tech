@@ -15,7 +15,6 @@ const FIELDS = {
 };
 
 async function fetchAllPages(endpoint ) {
-    // ... (código da função fetchAllPages, sem alterações)
     let allData = [];
     let skip = 0;
     const top = 250;
@@ -48,8 +47,10 @@ function processDeal(deal, type) {
     if (!date) return null;
     return {
         id: deal.Id, contactId: deal.ContactId, statusId: deal.StatusId, cliente: deal.Title,
+        cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date), vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
-        sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A', produto: getProp(FIELDS.PRODUTO)?.ObjectValueName || 'N/A',
+        sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A', 
+        produto: getProp(FIELDS.PRODUTO)?.ObjectValueName || getProp(FIELDS.PRODUTO)?.ValueName || 'N/A',
         mrr: getProp(FIELDS.MRR)?.DecimalValue || 0, adesao: (getProp(FIELDS.ADESAO_S)?.DecimalValue || 0) + (getProp(FIELDS.ADESAO_R)?.DecimalValue || 0),
         upsell: getProp(FIELDS.UPSELL)?.DecimalValue || 0, status: type,
     };
@@ -64,8 +65,8 @@ export async function GET(request) {
 
     try {
         const [vendasData, churnData] = await Promise.all([
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name)`),
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name)`)
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`),
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`)
         ]);
 
         const allVendasProcessed = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
@@ -75,7 +76,7 @@ export async function GET(request) {
         for (const venda of allVendasProcessed) {
             if (venda.contactId && venda.statusId === 2) {
                 if (!dataMap.has(venda.contactId) || new Date(venda.data) > new Date(dataMap.get(venda.contactId).data)) {
-                    dataMap.set(venda.contactId, { mrr: venda.mrr, vendedor: venda.vendedor, sdr: venda.sdr, data: venda.data });
+                    dataMap.set(venda.contactId, { mrr: venda.mrr, vendedor: venda.vendedor, sdr: venda.sdr, data: venda.data, produto: venda.produto });
                 }
             }
         }
@@ -83,7 +84,13 @@ export async function GET(request) {
         processedChurn = processedChurn.map(churn => {
             if (churn.contactId && dataMap.has(churn.contactId)) {
                 const originalData = dataMap.get(churn.contactId);
-                return { ...churn, mrr: originalData.mrr, vendedor: originalData.vendedor, sdr: originalData.sdr };
+                return { 
+                    ...churn, 
+                    mrr: originalData.mrr, 
+                    vendedor: originalData.vendedor, 
+                    sdr: originalData.sdr,
+                    produto: churn.produto === 'N/A' ? originalData.produto : churn.produto
+                };
             }
             return churn;
         });
