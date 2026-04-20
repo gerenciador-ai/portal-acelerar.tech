@@ -64,8 +64,14 @@ function DFCContent() {
   };
 
   const formatarMoeda = (valor) => {
-    if (valor === null || valor === undefined) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
+    if (valor === null || valor === undefined) return "—";
+    const absValor = Math.abs(valor);
+    const options = {
+      minimumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+      maximumFractionDigits: (absValor > 0 && absValor < 1) ? 2 : 0,
+      useGrouping: true,
+    };
+    return new Intl.NumberFormat('pt-BR', options).format(valor);
   };
 
   // FUNÇÃO DE CARREGAMENTO DO DETALHAMENTO
@@ -145,7 +151,7 @@ function DFCContent() {
               const isTotal = linha.key.startsWith('(=)') || linha.key === 'SALDO_INICIAL';
               return (
                 <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
-                  <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
+                  <td className={`p-4 text-[11px] ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                   {linha.valores.map((valor, mIdx) => {
                     const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
                     // Apenas linhas que não são de saldo podem ser clicadas para detalhamento
@@ -156,7 +162,7 @@ function DFCContent() {
                         <button
                           onClick={() => podeClicar && carregarDetalhamento(mIdx, linha.key, linha.label)}
                           disabled={!podeClicar}
-                          className={`w-full h-full p-4 text-sm text-right transition-all duration-150 focus:outline-none
+                          className={`w-full h-full p-4 text-[11px] text-right transition-all duration-150 focus:outline-none
                             ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
                             ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : podeClicar ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}
                           `}
@@ -195,7 +201,7 @@ function DFCContent() {
           Detalhamento dos Lançamentos
           {nomeMes && nomeGrupo && (
             <span className="ml-2 text-xs font-normal text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-              {nomeGrupo} • {nomeMes}/{anoAtivo}
+              {nomeGrupo} • ${nomeMes}/${anoAtivo}
             </span>
           )}
         </h3>
@@ -250,16 +256,6 @@ function DFCContent() {
                   ))
                 )}
               </tbody>
-              {detalhamento.length > 0 && (
-                <tfoot>
-                  <tr className="bg-acelerar-light-blue/10 font-bold border-t border-white/10">
-                    <td colSpan="4" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
-                    <td className={`p-4 text-sm text-right font-bold ${detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0) < 0 ? 'text-red-400' : 'text-white'}`}>
-                      {formatarMoeda(detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0))}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
         )}
@@ -267,63 +263,92 @@ function DFCContent() {
     );
   };
 
+  const empresas = [
+    { nome: 'Victec', logo: '/logo_victec.png' },
+    { nome: 'VMC Tech', logo: '/logo_vmctech.png' },
+    { nome: 'GRT', logo: '/logo_GRT.png' },
+    { nome: 'Bllog', logo: '/logo_bllog.png' },
+    { nome: 'M3', logo: '/logo_m3sistemas.png' },
+    { nome: 'Acelerar', logo: '/logo_acelerar_sidebar.png' },
+    { nome: 'bLive', logo: '/logo_blive.png' },
+    { nome: 'Condway', logo: '/logo_condway.png' },
+    { nome: 'Isket', logo: '/logo_isket.png' },
+  ];
+
   return (
-    <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 space-y-8">
-      <div className="flex items-center justify-between border-b border-white/10">
-        <div className="flex gap-2">
-          <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
-          <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
-          <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
-          <EmpresaTab nome="GRT" logo="/logo_GRT.png" isActive={empresaAtiva === 'GRT'} onClick={() => setEmpresaAtiva('GRT')} />
-          <EmpresaTab nome="Bllog" logo="/logo_bllog.png" isActive={empresaAtiva === 'Bllog'} onClick={() => setEmpresaAtiva('Bllog')} />
-          <EmpresaTab nome="M3" logo="/logo_m3sistemas.png" isActive={empresaAtiva === 'M3'} onClick={() => setEmpresaAtiva('M3')} />
+    <div className="flex flex-col h-full bg-acelerar-dark-blue text-white">
+      <div className="flex-shrink-0 bg-acelerar-dark-blue/80 backdrop-blur-sm border-b border-white/10 p-4 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl font-bold">Fluxo de Caixa</h1>
+          <p className="text-sm text-white/50">DEMONSTRATIVO DE FLUXO DE CAIXA (REGIME DE CAIXA)</p>
         </div>
-        {empresaAtiva && (
-          <div className="flex items-center gap-4">
-            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
-              <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
-            </div>
-            <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
-              <option value={2026}>Ano: 2026</option>
+        <div className="flex items-center space-x-2">
+          <div className="relative">
+            <select
+              value={anoAtivo}
+              onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
+              className="bg-white/5 border border-white/10 rounded-md pl-3 pr-8 py-2 text-sm text-white appearance-none focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
+            >
+              <option value={2026}>ANO: 2026</option>
+              <option value={2025}>ANO: 2025</option>
+              <option value={2024}>ANO: 2024</option>
             </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/50">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-shrink-0 bg-acelerar-dark-blue/80 backdrop-blur-sm border-b border-white/10 flex overflow-x-auto">
+        {empresas.map((emp) => (
+          <EmpresaTab
+            key={emp.nome}
+            nome={emp.nome}
+            logo={emp.logo}
+            isActive={empresaAtiva === emp.nome}
+            onClick={() => setEmpresaAtiva(emp.nome)}
+          />
+        ))}
+      </div>
+
+      <div className="flex-1 p-4 overflow-y-auto">
+        {!empresaAtiva ? (
+          <div className="flex items-center justify-center h-full rounded-xl border border-dashed border-white/10 bg-white/5">
+            <p className="text-sm text-white/30 font-medium uppercase tracking-widest">
+              Selecione uma empresa para visualizar o DFC
+            </p>
+          </div>
+        ) : loading ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-3">
+            <div className="w-10 h-10 border-4 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm text-white/40 font-medium uppercase tracking-widest">Carregando DFC...</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex space-x-2 mb-4">
+              {['Mensal', 'Trimestral', 'Anual'].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setVisao(v)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${visao === v ? 'bg-acelerar-light-blue text-acelerar-dark-blue' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            {renderTabelaMensal()}
+            {renderDetalhamento()}
           </div>
         )}
       </div>
-      {!empresaAtiva ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-white/20 space-y-4">
-          <p className="text-sm font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
-        </div>
-      ) : (
-        <div className="flex-1 space-y-6">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-64 space-y-4">
-              <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Processando dados do Nibo via Supabase...</p>
-            </div>
-          ) : (
-            <div className="space-y-4 animate-in fade-in duration-500">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-acelerar-light-blue rounded-full"></span>
-                Demonstrativo de Fluxo de Caixa - {empresaAtiva}
-              </h3>
-              {renderTabelaMensal()}
-              {renderDetalhamento()}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-export default function DFCPage() {
+export default function DFC() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col h-full bg-acelerar-dark-blue p-8 items-center justify-center">
-        <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    }>
+    <Suspense fallback={<div>Carregando...</div>}>
       <DFCContent />
     </Suspense>
   );
