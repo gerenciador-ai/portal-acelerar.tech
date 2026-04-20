@@ -72,11 +72,19 @@ export async function GET(request) {
         const allVendasProcessed = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
+        // Mapa de referência para preencher dados do Churn a partir da Venda original
         const dataMap = new Map();
         for (const venda of allVendasProcessed) {
             if (venda.contactId && venda.statusId === 2) {
+                // Mantém a venda mais recente de cada contato como referência
                 if (!dataMap.has(venda.contactId) || new Date(venda.data) > new Date(dataMap.get(venda.contactId).data)) {
-                    dataMap.set(venda.contactId, { mrr: venda.mrr, vendedor: venda.vendedor, sdr: venda.sdr, data: venda.data, produto: venda.produto });
+                    dataMap.set(venda.contactId, { 
+                        mrr: venda.mrr, 
+                        vendedor: venda.vendedor, 
+                        sdr: venda.sdr, 
+                        data: venda.data,
+                        produto: venda.produto 
+                    });
                 }
             }
         }
@@ -89,7 +97,8 @@ export async function GET(request) {
                     mrr: originalData.mrr, 
                     vendedor: originalData.vendedor, 
                     sdr: originalData.sdr,
-                    produto: churn.produto === 'N/A' ? originalData.produto : churn.produto
+                    // Se o produto no card de Churn for N/A, herda o produto da venda original
+                    produto: (churn.produto === 'N/A' || !churn.produto) ? originalData.produto : churn.produto
                 };
             }
             return churn;
