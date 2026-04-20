@@ -277,6 +277,10 @@ function DFCContent() {
           <EmpresaTab nome="GRT" logo="/logo_GRT.png" isActive={empresaAtiva === 'GRT'} onClick={() => setEmpresaAtiva('GRT')} />
           <EmpresaTab nome="Bllog" logo="/logo_bllog.png" isActive={empresaAtiva === 'Bllog'} onClick={() => setEmpresaAtiva('Bllog')} />
           <EmpresaTab nome="M3" logo="/logo_m3sistemas.png" isActive={empresaAtiva === 'M3'} onClick={() => setEmpresaAtiva('M3')} />
+          <EmpresaTab nome="Acelerar" logo="/logo_acelerar_sidebar.png" isActive={empresaAtiva === 'Acelerar'} onClick={() => setEmpresaAtiva('Acelerar')} />
+          <EmpresaTab nome="bLive" logo="/logo_blive.png" isActive={empresaAtiva === 'bLive'} onClick={() => setEmpresaAtiva('bLive')} />
+          <EmpresaTab nome="Condway" logo="/logo_condway.png" isActive={empresaAtiva === 'Condway'} onClick={() => setEmpresaAtiva('Condway')} />
+          <EmpresaTab nome="Isket" logo="/logo_isket.png" isActive={empresaAtiva === 'Isket'} onClick={() => setEmpresaAtiva('Isket')} />
         </div>
         {empresaAtiva && (
           <div className="flex items-center gap-4">
