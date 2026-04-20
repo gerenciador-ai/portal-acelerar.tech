@@ -15,6 +15,10 @@ const EMPRESAS = [
   { nome: "GRT", apiKeyEnv: "NIBO_API_KEY_GRT" },
   { nome: "Bllog", apiKeyEnv: "NIBO_API_KEY_BLLOG" },
   { nome: "M3", apiKeyEnv: "NIBO_API_KEY_M3" },
+  { nome: "Acelerar", apiKeyEnv: "NIBO_API_KEY_ACELERAR" },
+  { nome: "bLive", apiKeyEnv: "NIBO_API_KEY_BLIVE" },
+  { nome: "Condway", apiKeyEnv: "NIBO_API_KEY_CONDWAY" },
+  { nome: "Isket", apiKeyEnv: "NIBO_API_KEY_ISKET" },
 ];
 
 // ── Busca paginada mensal ─────────────────────────────────────────────────────
@@ -253,7 +257,7 @@ export async function GET(request) {
     set("(=) RECEITA LÍQUIDA", recLiq);
 
     const custosOp = get("(-) CUSTOS OPERACIONAIS");
-    const despAdmin = get("(-) DESPESAS ADMINISTRATIVAS");
+    const despAdmin = get("(-) DESPESAS ADMINISTRATIVAS");	
     const despCom = get("(-) DESPESAS COMERCIAIS");
     const fco = recLiq + custosOp + despAdmin + despCom;
     set("(=) FLUXO OPERACIONAL (FCO)", fco);
