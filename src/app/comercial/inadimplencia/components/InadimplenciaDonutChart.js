@@ -23,13 +23,16 @@ export default function InadimplenciaDonutChart({ data }) {
         return <div className="text-center text-white/50 p-4">Sem dados para exibir no gráfico.</div>;
     }
 
+    // CORREÇÃO CIRÚRGICA: Filtra os dados para remover faixas com valor 0
+    const filteredData = data.filter(item => item.value > 0);
+
     return (
         <div className="h-80">
             <h3 className="text-lg font-semibold text-white mb-4">Clientes por Faixa de Atraso</h3>
             <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                     <Pie
-                        data={data}
+                        data={filteredData}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -40,9 +43,8 @@ export default function InadimplenciaDonutChart({ data }) {
                         nameKey="name"
                         label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                     >
-                        {data.map((entry) => ( <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} /> ))}
+                        {filteredData.map((entry) => ( <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} /> ))}
                     </Pie>
-                    {/* CORREÇÃO: Usando o componente de Tooltip customizado */}
                     <Tooltip content={<CustomTooltip />} />
                 </PieChart>
             </ResponsiveContainer>
