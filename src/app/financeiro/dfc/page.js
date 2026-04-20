@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import Image from 'next/image';
 
 function EmpresaTab({ nome, logo, isActive, onClick }) {
@@ -38,24 +38,44 @@ function DFCContent() {
   const [visao, setVisao] = useState('Mensal');
   const [anoAtivo, setAnoAtivo] = useState(2026);
 
+  // CACHE DE DADOS POR EMPRESA PARA CONSOLIDAÇÃO
+  const [cacheDados, setCacheDados] = useState({});
+
   // ESTADOS DO DETALHAMENTO
   const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null, grupoLabel: null });
   const [detalhamento, setDetalhamento] = useState([]);
   const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
 
+  const empresas = [
+    { nome: "VMC Tech", logo: "/logo_vmctech.png" },
+    { nome: "Victec", logo: "/logo_victec.png" },
+    { nome: "GRT", logo: "/logo_GRT.png" },
+    { nome: "Bllog", logo: "/logo_bllog.png" },
+    { nome: "M3", logo: "/logo_m3sistemas.png" },
+    { nome: "Acelerar", logo: "/logo_acelerar_sidebar.png" },
+    { nome: "bLive", logo: "/logo_blive.png" },
+    { nome: "Condway", logo: "/logo_condway.png" },
+    { nome: "Isket", logo: "/logo_isket.png" }
+  ];
+
   useEffect(() => {
-    if (empresaAtiva && empresaAtiva !== 'Consolidado') {
-      carregarDados();
+    if (empresaAtiva) {
+      if (empresaAtiva === 'Consolidado') {
+        carregarConsolidado();
+      } else {
+        carregarDados(empresaAtiva);
+      }
     }
   }, [empresaAtiva, anoAtivo]);
 
-  const carregarDados = async () => {
+  const carregarDados = async (nomeEmpresa) => {
     setLoading(true);
     setDados(null);
     try {
-      const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}`);
+      const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(nomeEmpresa)}&ano=${anoAtivo}`);
       const data = await res.json();
       setDados(data);
+      setCacheDados(prev => ({ ...prev, [nomeEmpresa]: data }));
     } catch (error) {
       console.error('Erro ao carregar DFC:', error);
     } finally {
@@ -63,12 +83,66 @@ function DFCContent() {
     }
   };
 
+  const carregarConsolidado = async () => {
+    setLoading(true);
+    setDados(null);
+    try {
+      // Carrega em paralelo todas as empresas que ainda não estão no cache
+      const promessas = empresas.map(async (emp) => {
+        if (!cacheDados[emp.nome]) {
+          const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(emp.nome)}&ano=${anoAtivo}`);
+          return { nome: emp.nome, data: await res.json() };
+        }
+        return { nome: emp.nome, data: cacheDados[emp.nome] };
+      });
+
+      const resultados = await Promise.all(promessas);
+      const novoCache = {};
+      resultados.forEach(r => { novoCache[r.nome] = r.data; });
+      setCacheDados(prev => ({ ...prev, ...novoCache }));
+
+      // Gera a matriz consolidada
+      const consolidado = gerarDadosConsolidados(novoCache);
+      setDados(consolidado);
+    } catch (error) {
+      console.error('Erro ao consolidar DFC:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const gerarDadosConsolidados = (cache) => {
+    const primeiraEmpresa = Object.values(cache)[0];
+    if (!primeiraEmpresa || !primeiraEmpresa.matriz) return null;
+
+    const matrizConsolidada = primeiraEmpresa.matriz.map(linhaOriginal => {
+      const novaLinha = { ...linhaOriginal, valores: new Array(12).fill(0) };
+      
+      Object.values(cache).forEach(empresaData => {
+        const linhaEmpresa = empresaData.matriz?.find(l => l.key === linhaOriginal.key);
+        if (linhaEmpresa) {
+          linhaEmpresa.valores.forEach((v, i) => {
+            novaLinha.valores[i] += (v || 0);
+          });
+        }
+      });
+      return novaLinha;
+    });
+
+    const saldoInicialConsolidado = Object.values(cache).reduce((acc, emp) => acc + (emp.saldoInicial || 0), 0);
+
+    return {
+      ...primeiraEmpresa,
+      saldoInicial: saldoInicialConsolidado,
+      matriz: matrizConsolidada
+    };
+  };
+
   const formatarMoeda = (valor) => {
     if (valor === null || valor === undefined) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor);
   };
 
-  // FUNÇÃO DE CARREGAMENTO DO DETALHAMENTO
   const carregarDetalhamento = async (mesIdx, grupoKey, grupoLabel) => {
     if (selecionado.mesIdx === mesIdx && selecionado.grupoKey === grupoKey) {
       setSelecionado({ mesIdx: null, grupoKey: null, grupoLabel: null });
@@ -76,17 +150,35 @@ function DFCContent() {
       return;
     }
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
-    setLoadingDetalhamento(true);
-    setDetalhamento([]);
-    try {
-      const mes = mesIdx + 1;
-      const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&grupo=${encodeURIComponent(grupoKey)}`);
-      const data = await res.json();
-      setDetalhamento(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Erro ao carregar detalhamento:', error);
-    } finally {
-      setLoadingDetalhamento(false);
+    
+    if (empresaAtiva === 'Consolidado') {
+      // Detalhamento Consolidado: Mostra quanto cada empresa representa
+      const detalheConsolidado = empresas.map(emp => {
+        const dadosEmpresa = cacheDados[emp.nome];
+        const linha = dadosEmpresa?.matriz?.find(l => l.key === grupoKey);
+        const valor = linha ? linha.valores[mesIdx] : 0;
+        return {
+          nome: emp.nome,
+          valor: valor,
+          isConsolidado: true
+        };
+      }).filter(item => item.valor !== 0);
+      
+      setDetalhamento(detalheConsolidado);
+    } else {
+      // Detalhamento Normal: Busca lançamentos no Nibo
+      setLoadingDetalhamento(true);
+      setDetalhamento([]);
+      try {
+        const mes = mesIdx + 1;
+        const res = await fetch(`/api/financeiro/dfc/detalhamento?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&grupo=${encodeURIComponent(grupoKey)}`);
+        const data = await res.json();
+        setDetalhamento(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Erro ao carregar detalhamento:', error);
+      } finally {
+        setLoadingDetalhamento(false);
+      }
     }
   };
 
@@ -95,7 +187,6 @@ function DFCContent() {
     const meses = dados.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
     const saldoInicial = dados.saldoInicial || 0;
 
-    // CÁLCULO EM CASCATA DOS SALDOS
     let saldoAcumulado = saldoInicial;
     const linhasSaldos = {
       inicial: { key: 'SALDO_INICIAL', label: 'SALDO INICIAL', valores: [] },
@@ -103,32 +194,23 @@ function DFCContent() {
       final: { key: '(=) SALDO LÍQUIDO DO PERÍODO', label: '(=) SALDO LÍQUIDO DO PERÍODO', valores: [] }
     };
 
-    // Encontra a linha de resultado original do NIBO (última linha calculada)
     const linhaResultadoOriginal = dados.matriz.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
 
     if (linhaResultadoOriginal) {
       linhaResultadoOriginal.valores.forEach((valorMesNibo) => {
-        // Saldo Inicial do mês
         linhasSaldos.inicial.valores.push(saldoAcumulado);
-
-        // Saldo Operacional Líquido (resultado do mês vindo do NIBO)
         linhasSaldos.operacional.valores.push(valorMesNibo);
-
-        // Saldo Líquido do Período (Saldo Inicial + Saldo Operacional)
         const novoSaldoFinal = saldoAcumulado + valorMesNibo;
         linhasSaldos.final.valores.push(novoSaldoFinal);
-
-        // O saldo final deste mês é o inicial do próximo
         saldoAcumulado = novoSaldoFinal;
       });
     }
 
-    // Cria a matriz final para renderização
     const matrizFinal = [
-      linhasSaldos.inicial, // SALDO INICIAL no topo
-      ...dados.matriz.filter(l => l.key !== '(=) SALDO LÍQUIDO DO PERÍODO'), // Todas as linhas originais, exceto a última
-      linhasSaldos.operacional, // SALDO OPERACIONAL LÍQUIDO (renomeado)
-      linhasSaldos.final // SALDO LÍQUIDO DO PERÍODO (novo cálculo)
+      linhasSaldos.inicial,
+      ...dados.matriz.filter(l => l.key !== '(=) SALDO LÍQUIDO DO PERÍODO'),
+      linhasSaldos.operacional,
+      linhasSaldos.final
     ];
 
     return (
@@ -148,8 +230,7 @@ function DFCContent() {
                   <td className={`p-4 text-sm ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                   {linha.valores.map((valor, mIdx) => {
                     const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
-                    // Apenas linhas que não são de saldo podem ser clicadas para detalhamento
-                    const podeClicar = !isTotal || linha.key.startsWith('(=)') && !linha.key.includes('SALDO');
+                    const podeClicar = !isTotal || linha.key.startsWith('(=)') && !linha.key.includes('SALDO') || (empresaAtiva === 'Consolidado' && linha.key === 'SALDO_INICIAL');
                     
                     return (
                       <td key={mIdx} className="p-0 relative group">
@@ -163,14 +244,6 @@ function DFCContent() {
                         >
                           {formatarMoeda(valor || 0)}
                         </button>
-                        {podeClicar && (
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-50 pointer-events-none">
-                            <div className="bg-gray-900 text-white/80 text-[10px] py-1 px-2 rounded shadow-xl border border-white/10 whitespace-nowrap">
-                              Exibir detalhamento
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          </div>
-                        )}
                       </td>
                     );
                   })}
@@ -187,12 +260,13 @@ function DFCContent() {
     const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
     const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
     const nomeGrupo = selecionado.grupoLabel;
+    const isConsolidado = empresaAtiva === 'Consolidado';
 
     return (
       <div className="space-y-4 animate-in fade-in duration-300">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2">
           <span className="w-1.5 h-6 bg-yellow-400 rounded-full"></span>
-          Detalhamento dos Lançamentos
+          {isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'}
           {nomeMes && nomeGrupo && (
             <span className="ml-2 text-xs font-normal text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
               {nomeGrupo} • {nomeMes}/{anoAtivo}
@@ -203,7 +277,7 @@ function DFCContent() {
         {!selecionado.mesIdx && selecionado.mesIdx !== 0 ? (
           <div className="flex items-center justify-center h-32 rounded-xl border border-dashed border-white/10 bg-white/5">
             <p className="text-xs text-white/30 font-medium uppercase tracking-widest">
-              Para exibir o detalhamento, selecione o mês e a categoria que deseja detalhar no quadro acima.
+              Selecione um valor na tabela acima para visualizar o detalhamento.
             </p>
           </div>
         ) : loadingDetalhamento ? (
@@ -216,47 +290,75 @@ function DFCContent() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white/5 text-[10px] text-white/50 uppercase font-bold tracking-widest">
-                  <th className="p-4 border-b border-white/10">Data</th>
-                  <th className="p-4 border-b border-white/10">Nome</th>
-                  <th className="p-4 border-b border-white/10">Descrição</th>
-                  <th className="p-4 border-b border-white/10">Categoria</th>
-                  <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                  {isConsolidado ? (
+                    <>
+                      <th className="p-4 border-b border-white/10">Empresa</th>
+                      <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                      <th className="p-4 border-b border-white/10 text-right">% Participação</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-4 border-b border-white/10">Data</th>
+                      <th className="p-4 border-b border-white/10">Nome</th>
+                      <th className="p-4 border-b border-white/10">Descrição</th>
+                      <th className="p-4 border-b border-white/10">Categoria</th>
+                      <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {detalhamento.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="p-8 text-center text-xs text-white/30 italic">
-                      Nenhum lançamento encontrado para este filtro.
+                    <td colSpan={isConsolidado ? 3 : 5} className="p-8 text-center text-xs text-white/30 italic">
+                      Nenhum dado encontrado para este filtro.
                     </td>
                   </tr>
                 ) : (
-                  detalhamento.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
-                      <td className="p-4 text-sm text-white/60 font-mono">
-                        {item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                      </td>
-                      <td className="p-4 text-sm text-white/80 font-medium">{item.nome || '—'}</td>
-                      <td className="p-4 text-sm text-white/50 italic">{item.descricao || '—'}</td>
-                      <td className="p-4 text-sm">
-                        <span className="text-[10px] text-white/60 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
-                          {item.categoria || '—'}
-                        </span>
-                      </td>
-                      <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
-                        {formatarMoeda(item.valor || 0)}
-                      </td>
-                    </tr>
-                  ))
+                  detalhamento.map((item, idx) => {
+                    const total = detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0);
+                    const participacao = total !== 0 ? ((item.valor / total) * 100).toFixed(1) : 0;
+
+                    return (
+                      <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
+                        {isConsolidado ? (
+                          <>
+                            <td className="p-4 text-sm text-white/80 font-medium">{item.nome}</td>
+                            <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
+                              {formatarMoeda(item.valor || 0)}
+                            </td>
+                            <td className="p-4 text-sm text-right text-white/40 font-mono">{participacao}%</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-4 text-sm text-white/60 font-mono">
+                              {item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                            </td>
+                            <td className="p-4 text-sm text-white/80 font-medium">{item.nome || '—'}</td>
+                            <td className="p-4 text-sm text-white/50 italic">{item.descricao || '—'}</td>
+                            <td className="p-4 text-sm">
+                              <span className="text-[10px] text-white/60 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
+                                {item.categoria || '—'}
+                              </span>
+                            </td>
+                            <td className={`p-4 text-sm text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>
+                              {formatarMoeda(item.valor || 0)}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
               {detalhamento.length > 0 && (
                 <tfoot>
                   <tr className="bg-acelerar-light-blue/10 font-bold border-t border-white/10">
-                    <td colSpan="4" className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total</td>
+                    <td colSpan={isConsolidado ? 1 : 4} className="p-4 text-xs text-acelerar-light-blue uppercase tracking-widest text-right">Total Consolidado</td>
                     <td className={`p-4 text-sm text-right font-bold ${detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0) < 0 ? 'text-red-400' : 'text-white'}`}>
                       {formatarMoeda(detalhamento.reduce((acc, i) => acc + (i.valor || 0), 0))}
                     </td>
+                    {isConsolidado && <td className="p-4 text-sm text-right text-acelerar-light-blue font-mono">100%</td>}
                   </tr>
                 </tfoot>
               )}
@@ -272,15 +374,9 @@ function DFCContent() {
       <div className="flex items-center justify-between border-b border-white/10">
         <div className="flex gap-2">
           <EmpresaTab nome="Consolidado" logo="/logo_acelerar_login.png" isActive={empresaAtiva === 'Consolidado'} onClick={() => setEmpresaAtiva('Consolidado')} />
-          <EmpresaTab nome="VMC Tech" logo="/logo_vmctech.png" isActive={empresaAtiva === 'VMC Tech'} onClick={() => setEmpresaAtiva('VMC Tech')} />
-          <EmpresaTab nome="Victec" logo="/logo_victec.png" isActive={empresaAtiva === 'Victec'} onClick={() => setEmpresaAtiva('Victec')} />
-          <EmpresaTab nome="GRT" logo="/logo_GRT.png" isActive={empresaAtiva === 'GRT'} onClick={() => setEmpresaAtiva('GRT')} />
-          <EmpresaTab nome="Bllog" logo="/logo_bllog.png" isActive={empresaAtiva === 'Bllog'} onClick={() => setEmpresaAtiva('Bllog')} />
-          <EmpresaTab nome="M3" logo="/logo_m3sistemas.png" isActive={empresaAtiva === 'M3'} onClick={() => setEmpresaAtiva('M3')} />
-          <EmpresaTab nome="Acelerar" logo="/logo_acelerar_sidebar.png" isActive={empresaAtiva === 'Acelerar'} onClick={() => setEmpresaAtiva('Acelerar')} />
-          <EmpresaTab nome="bLive" logo="/logo_blive.png" isActive={empresaAtiva === 'bLive'} onClick={() => setEmpresaAtiva('bLive')} />
-          <EmpresaTab nome="Condway" logo="/logo_condway.png" isActive={empresaAtiva === 'Condway'} onClick={() => setEmpresaAtiva('Condway')} />
-          <EmpresaTab nome="Isket" logo="/logo_isket.png" isActive={empresaAtiva === 'Isket'} onClick={() => setEmpresaAtiva('Isket')} />
+          {empresas.map(emp => (
+            <EmpresaTab key={emp.nome} nome={emp.nome} logo={emp.logo} isActive={empresaAtiva === emp.nome} onClick={() => setEmpresaAtiva(emp.nome)} />
+          ))}
         </div>
         {empresaAtiva && (
           <div className="flex items-center gap-4">
@@ -303,7 +399,9 @@ function DFCContent() {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 space-y-4">
               <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs text-white/40 font-medium uppercase tracking-widest">Processando dados do Nibo via Supabase...</p>
+              <p className="text-xs text-white/40 font-medium uppercase tracking-widest">
+                {empresaAtiva === 'Consolidado' ? 'Consolidando dados de todas as empresas...' : 'Processando dados do Nibo via Supabase...'}
+              </p>
             </div>
           ) : (
             <div className="space-y-4 animate-in fade-in duration-500">
