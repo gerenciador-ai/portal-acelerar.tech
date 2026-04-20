@@ -12,6 +12,9 @@ const NIBO_BASE = "https://api.nibo.com.br/empresas/v1";
 const EMPRESAS = [
   { nome: "Victec", apiKeyEnv: "NIBO_API_KEY_VICTEC" },
   { nome: "VMC Tech", apiKeyEnv: "NIBO_API_KEY_VMCTECH" },
+  { nome: "GRT", apiKeyEnv: "NIBO_API_KEY_GRT" },
+  { nome: "Bllog", apiKeyEnv: "NIBO_API_KEY_BLLOG" },
+  { nome: "M3", apiKeyEnv: "NIBO_API_KEY_M3" },
 ];
 
 // ── Busca paginada mensal (Linha 18 do original) ─────────────────────────────
