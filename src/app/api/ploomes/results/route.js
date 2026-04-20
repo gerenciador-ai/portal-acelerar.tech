@@ -46,25 +46,17 @@ function processDeal(deal, type) {
     }
     if (!date) return null;
 
-    // Tenta extrair o produto do card atual
-    let produto = getProp(FIELDS.PRODUTO)?.ObjectValueName || getProp(FIELDS.PRODUTO)?.ValueName;
-
-    // Se for Churn e o produto for N/A, tenta buscar na última venda ganha anexada ao contato (Deep Expand)
-    if (type === 'Churn' && (!produto || produto === 'N/A')) {
-        const lastWonDeal = deal.Contact?.Deals?.[0];
-        if (lastWonDeal) {
-            const lastProps = lastWonDeal.OtherProperties || [];
-            produto = lastProps.find(p => p.FieldId === FIELDS.PRODUTO)?.ObjectValueName || 
-                      lastProps.find(p => p.FieldId === FIELDS.PRODUTO)?.ValueName;
-        }
-    }
+    // Extração do produto com fallback para Sittax Simples (produto principal)
+    const produto = getProp(FIELDS.PRODUTO)?.ObjectValueName || 
+                    getProp(FIELDS.PRODUTO)?.ValueName || 
+                    'Sittax Simples';
 
     return {
         id: deal.Id, contactId: deal.ContactId, statusId: deal.StatusId, cliente: deal.Title,
         cnpj: deal.Contact?.CNPJ || deal.Contact?.CPF || 'N/A',
         data: new Date(date), vendedor: getProp(FIELDS.VENDEDOR)?.UserValueName || 'N/A',
         sdr: getProp(FIELDS.SDR)?.UserValueName || 'N/A', 
-        produto: produto || 'N/A',
+        produto: produto,
         mrr: getProp(FIELDS.MRR)?.DecimalValue || 0, adesao: (getProp(FIELDS.ADESAO_S)?.DecimalValue || 0) + (getProp(FIELDS.ADESAO_R)?.DecimalValue || 0),
         upsell: getProp(FIELDS.UPSELL)?.DecimalValue || 0, status: type,
     };
@@ -78,18 +70,14 @@ export async function GET(request) {
     if (!config) return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 400 });
 
     try {
-        // A mágica acontece aqui: Expandimos o contato e, dentro dele, buscamos a última venda ganha histórica (StatusId eq 2)
-        const contactExpand = 'Contact($select=Id,Name,CNPJ,CPF;$expand=Deals($filter=StatusId eq 2;$orderby=FinishDate desc;$top=1;$expand=OtherProperties))';
-        
         const [vendasData, churnData] = await Promise.all([
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,${contactExpand}`),
-            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,${contactExpand}`)
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.vendas}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`),
+            fetchAllPages(`/Deals?$filter=PipelineId eq ${config.churn}&$expand=OtherProperties,Contact($select=Id,Name,CNPJ,CPF)`)
         ]);
 
         const allVendasProcessed = vendasData.map(deal => processDeal(deal, 'Venda')).filter(Boolean);
         let processedChurn = churnData.map(deal => processDeal(deal, 'Churn')).filter(Boolean);
 
-        // Mapa de referência para preencher MRR, Vendedor e SDR do Churn a partir das vendas do período atual
         const dataMap = new Map();
         for (const venda of allVendasProcessed) {
             if (venda.contactId && venda.statusId === 2) {
@@ -113,7 +101,8 @@ export async function GET(request) {
                     mrr: originalData.mrr, 
                     vendedor: originalData.vendedor, 
                     sdr: originalData.sdr,
-                    produto: (churn.produto === 'N/A' || !churn.produto) ? originalData.produto : churn.produto
+                    // Se o produto for Sittax Simples (fallback) e houver algo mais específico na venda original, herda
+                    produto: (churn.produto === 'Sittax Simples') ? originalData.produto : churn.produto
                 };
             }
             return churn;
