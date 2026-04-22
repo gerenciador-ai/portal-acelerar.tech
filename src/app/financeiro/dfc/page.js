@@ -231,8 +231,8 @@ function DFCContent() {
       { key: "(-) DESPESAS ADMINISTRATIVAS", label: "(-) DESPESAS ADMINISTRATIVAS", tipo: "linha" },
       { key: "(-) DESPESAS COMERCIAIS", label: "(-) DESPESAS COMERCIAIS", tipo: "linha" },
       { key: "(=) FLUXO OPERACIONAL (FCO)", label: "(=) FLUXO OPERACIONAL (FCO)", tipo: "calculado" },
-      { key: "(-) RECUPERAÇÃO INTERCOMPANY", label: "(-) RECUPERAÇÃO INTERCOMPANY", tipo: "linha" },
-      { key: "(+) RATEIO RECEBIDO INTERCOMPANY", label: "(+) RATEIO RECEBIDO INTERCOMPANY", tipo: "linha" },
+      { key: "(+) RECUPERAÇÃO INTERCOMPANY", label: "(+) RECUPERAÇÃO INTERCOMPANY", tipo: "linha" },
+      { key: "(-) RATEIO RECEBIDO INTERCOMPANY", label: "(-) RATEIO RECEBIDO INTERCOMPANY", tipo: "linha" },
       { key: "(=) FLUXO OPERACIONAL GERENCIAL (FCO)", label: "(=) FLUXO OPERACIONAL GERENCIAL (FCO)", tipo: "calculado" },
       { key: "(+/-) FLUXO DE INVESTIMENTO (FCI)", label: "(+/-) FLUXO DE INVESTIMENTO (FCI)", tipo: "linha" },
       { key: "(-) DESPESAS FINANCEIRAS", label: "(-) DESPESAS FINANCEIRAS", tipo: "linha" },
@@ -243,8 +243,8 @@ function DFCContent() {
     const matrizGerencial = LINHAS_DFC_GERENCIAL.map(linha => {
       const valores = meses.map((_, mIdx) => {
         if (linha.tipo === "calculado") return null;
-        if (linha.key === "(-) RECUPERAÇÃO INTERCOMPANY") return -recuperacaoIntercompany[mIdx];
-        if (linha.key === "(+) RATEIO RECEBIDO INTERCOMPANY") return rateioRecebidoIntercompany[mIdx];
+        if (linha.key === "(+) RECUPERAÇÃO INTERCOMPANY") return recuperacaoIntercompany[mIdx];
+        if (linha.key === "(-) RATEIO RECEBIDO INTERCOMPANY") return -rateioRecebidoIntercompany[mIdx];
         const linhaReal = matrizReal.find(l => l.key === linha.key);
         return linhaReal ? linhaReal.valores[mIdx] : 0;
       });
@@ -261,7 +261,7 @@ function DFCContent() {
       const fcoReal = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
       set("(=) FLUXO OPERACIONAL (FCO)", fcoReal);
       
-      const fcoGerencial = fcoReal + get("(-) RECUPERAÇÃO INTERCOMPANY") + get("(+) RATEIO RECEBIDO INTERCOMPANY");
+      const fcoGerencial = fcoReal + get("(+) RECUPERAÇÃO INTERCOMPANY") + get("(-) RATEIO RECEBIDO INTERCOMPANY");
       set("(=) FLUXO OPERACIONAL GERENCIAL (FCO)", fcoGerencial);
       
       const saldoGerencial = fcoGerencial + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
