@@ -117,44 +117,43 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     // Lógica de Intercompany
     const dataRef = new Date(ano, mes - 1, 1);
     
-    // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
+    // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar de outras)
     const regrasOrigem = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
       const matchCategoria = (r.categoria_nibo || '').trim().toLowerCase() === (p9 || '').trim().toLowerCase() || (r.categoria_nibo || '').trim().toLowerCase() === (catNome || '').trim().toLowerCase();
       const matchFavorecido = (r.favorecido_nome || '').trim().toLowerCase() === (favorecido || '').trim().toLowerCase();
-      const matchEmpresaOrigem = (r.empresa_origem || '').trim() === empresaNome.trim();
+      const matchEmpresaOrigem = (r.empresa_origem || '').trim().toLowerCase() === empresaNome.trim().toLowerCase();
 
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaOrigem;
     });
 
     regrasOrigem.forEach(r => {
-      const valorRateado = Math.abs(valorOriginal) * (r.percentual / 100);
-      intercompany.recuperacao += valorRateado; // Acumula o valor a ser recuperado
+      const valorRateado = Math.abs(valorOriginal) * (parseFloat(r.percentual || 0) / 100);
+      intercompany.recuperacao += valorRateado;
     });
 
-    // Se esta empresa é o DESTINO (ela deve receber o rateio)
+    // Se esta empresa é o DESTINO (ela deve o rateio para quem pagou)
     const regrasDestino = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
       const matchCategoria = (r.categoria_nibo || '').trim().toLowerCase() === (p9 || '').trim().toLowerCase() || (r.categoria_nibo || '').trim().toLowerCase() === (catNome || '').trim().toLowerCase();
       const matchFavorecido = (r.favorecido_nome || '').trim().toLowerCase() === (favorecido || '').trim().toLowerCase();
-      const matchEmpresaDestino = (r.empresa_destino || '').trim() === empresaNome.trim();
+      const matchEmpresaDestino = (r.empresa_destino || '').trim().toLowerCase() === empresaNome.trim().toLowerCase();
 
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaDestino;
     });
 
     regrasDestino.forEach(r => {
-      const valorRateado = Math.abs(valorOriginal) * (r.percentual / 100);
-      intercompany.rateioRecebido += valorRateado; // Acumula o valor a ser recebido
+      const valorRateado = Math.abs(valorOriginal) * (parseFloat(r.percentual || 0) / 100);
+      intercompany.rateioRecebido += valorRateado;
     });
 
-    acumular(grupo, valorOriginal); // Acumula o valor original para o DFC Real
+    acumular(grupo, valorOriginal);
   };
 
-  // Receipts
   for (const item of receipts) {
     if (item.isTransfer) continue;
     const sid = item.scheduleId;
@@ -168,7 +167,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     }
   }
 
-  // Payments
   for (const item of payments) {
     if (item.isTransfer) continue;
     const sid = item.scheduleId;
@@ -185,7 +183,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
   return { acumulado, intercompany };
 }
 
-// ── Ordem e estrutura do DFC ──────────────────────────────────────────────────
 const LINHAS_DFC = [
   { key: "RECEITAS OPERACIONAIS", label: "RECEITAS OPERACIONAIS", tipo: "linha" },
   { key: "(-) IMPOSTOS SOBRE VENDAS", label: "(-) IMPOSTOS SOBRE VENDAS", tipo: "linha" },
@@ -225,7 +222,6 @@ export async function GET(request) {
   const apiKey = process.env[empresa.apiKeyEnv];
   if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
-  // Carregar Plano de Contas e Regras de Rateio
   const [planoRes, regrasRes] = await Promise.all([
     supabase.from("plano_contas_dfc").select("codigo_9_digitos, categoria_nibo, grupo_dfc"),
     supabase.from("regras_rateio_dfc").select("*")
@@ -234,7 +230,6 @@ export async function GET(request) {
   const planoContas = planoRes.data || [];
   const regrasRateio = regrasRes.data || [];
 
-  // Processar meses
   const mesesData = [];
   for (let batch = 0; batch < 4; batch++) {
     const mesesBatch = [batch * 3 + 1, batch * 3 + 2, batch * 3 + 3];
@@ -253,7 +248,6 @@ export async function GET(request) {
   const recuperacaoIntercompany = mesesData.map(m => m.intercompany.recuperacao);
   const rateioRecebidoIntercompany = mesesData.map(m => m.intercompany.rateioRecebido);
 
-  // Cálculo do Quadro 1 (Real)
   for (let m = 0; m < 12; m++) {
     const get = (k) => matriz.find(r => r.key === k).valores[m] || 0;
     const set = (k, v) => { matriz.find(r => r.key === k).valores[m] = v; };
