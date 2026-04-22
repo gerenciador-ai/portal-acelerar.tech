@@ -157,11 +157,19 @@ function DFCContent() {
       });
     });
 
+    const rateioRecebidoIntercompanyConsolidado = new Array(12).fill(0);
+    Object.values(cache).forEach(empresaData => {
+      empresaData.rateioRecebidoIntercompany?.forEach((v, i) => {
+        rateioRecebidoIntercompanyConsolidado[i] += (v || 0);
+      });
+    });
+
     return {
       ...primeiraEmpresa,
       saldoInicial: saldoInicialConsolidado,
       matriz: matrizConsolidada,
-      recuperacaoIntercompany: recuperacaoIntercompanyConsolidada
+      recuperacaoIntercompany: recuperacaoIntercompanyConsolidada,
+      rateioRecebidoIntercompany: rateioRecebidoIntercompanyConsolidado
     };
   };
 
@@ -212,13 +220,9 @@ function DFCContent() {
     if (!dados || !dados.matriz) return null;
     const matrizReal = dados.matriz;
     const recuperacaoIntercompany = dados.recuperacaoIntercompany || new Array(12).fill(0);
+    const rateioRecebidoIntercompany = dados.rateioRecebidoIntercompany || new Array(12).fill(0);
     const meses = dados.meses || ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
     
-    // Lógica de Rateio Recebido: No consolidado é 0. Em empresas individuais, é o que as outras recuperaram dela.
-    // Por enquanto, como a API não detalha o destino, vamos simular o rateio recebido para bLive, Victec e VMC (conforme planilha)
-    // TODO: Ajustar API para retornar rateio recebido real.
-    const rateioRecebidoIntercompany = new Array(12).fill(0);
-
     const LINHAS_DFC_GERENCIAL = [
       { key: "RECEITAS OPERACIONAIS", label: "RECEITAS OPERACIONAIS", tipo: "linha" },
       { key: "(-) IMPOSTOS SOBRE VENDAS", label: "(-) IMPOSTOS SOBRE VENDAS", tipo: "linha" },
@@ -250,12 +254,16 @@ function DFCContent() {
     for (let m = 0; m < 12; m++) {
       const get = (k) => matrizGerencial.find(r => r.key === k)?.valores[m] || 0;
       const set = (k, v) => { const row = matrizGerencial.find(r => r.key === k); if (row) row.valores[m] = v; };
+      
       const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
       set("(=) RECEITA LÍQUIDA", recLiq);
+      
       const fcoReal = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
       set("(=) FLUXO OPERACIONAL (FCO)", fcoReal);
+      
       const fcoGerencial = fcoReal + get("(-) RECUPERAÇÃO INTERCOMPANY") + get("(+) RATEIO RECEBIDO INTERCOMPANY");
       set("(=) FLUXO OPERACIONAL GERENCIAL (FCO)", fcoGerencial);
+      
       const saldoGerencial = fcoGerencial + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
       set("(=) SALDO LÍQUIDO DO PERÍODO", saldoGerencial);
     }
