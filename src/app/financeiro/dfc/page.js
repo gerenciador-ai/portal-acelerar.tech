@@ -99,6 +99,20 @@ function DFCContent() {
       const data = await res.json();
       setDados(data);
       setCacheDados(prev => ({ ...prev, [nomeEmpresa]: data }));
+
+      // DISPARA CARGA DAS OUTRAS EM BACKGROUND PARA INTERCOMPANY (Lógica do ajuste integrada)
+      const empresasParaCarregar = empresas.filter(e => e.nome !== nomeEmpresa && !cacheDados[e.nome]);
+      if (empresasParaCarregar.length > 0) {
+        Promise.all(empresasParaCarregar.map(async (emp) => {
+          try {
+            const r = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(emp.nome)}&ano=${anoAtivo}`);
+            const d = await r.json();
+            setCacheDados(prev => ({ ...prev, [emp.nome]: d }));
+          } catch (e) {
+            console.error(`Erro ao carregar cache para ${emp.nome}:`, e);
+          }
+        }));
+      }
     } catch (error) {
       console.error('Erro ao carregar DFC:', error);
     } finally {
@@ -166,6 +180,7 @@ function DFCContent() {
 
     return {
       ...primeiraEmpresa,
+      empresa: 'Consolidado',
       saldoInicial: saldoInicialConsolidado,
       matriz: matrizConsolidada,
       recuperacaoIntercompany: recuperacaoIntercompanyConsolidada,
@@ -216,12 +231,39 @@ function DFCContent() {
     alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
   };
 
+  // ── RECONCILIAÇÃO INTERCOMPANY CRUZADA (Lógica integrada do ajuste) ──────────
+  const dadosComIntercompanyCruzado = useMemo(() => {
+    if (!dados || !dados.matriz || empresaAtiva === 'Consolidado') return dados;
+    const d = JSON.parse(JSON.stringify(dados));
+    const nomeAtual = empresaAtiva.trim();
+    
+    // O rateio recebido da empresa atual é a soma de tudo que as OUTRAS empresas recuperaram DELA
+    const novoRateioRecebido = new Array(12).fill(0);
+
+    Object.keys(cacheDados).forEach(nomeOutra => {
+      if (nomeOutra.trim() === nomeAtual) return;
+      const dadosOutra = cacheDados[nomeOutra];
+      // detalheRecuperacao é um array de 12 meses, onde cada mês é um objeto { "Destino": valor }
+      if (dadosOutra.detalheRecuperacao) {
+        dadosOutra.detalheRecuperacao.forEach((mesObj, idx) => {
+          // Procura se a empresa atual (nomeAtual) está nos destinos de recuperação da outra empresa
+          const valorParaMim = mesObj[nomeAtual] || 0;
+          novoRateioRecebido[idx] += valorParaMim;
+        });
+      }
+    });
+
+    d.rateioRecebidoIntercompany = novoRateioRecebido;
+    return d;
+  }, [dados, cacheDados, empresaAtiva]);
+
   const gerarDadosGerenciais = useMemo(() => {
-    if (!dados || !dados.matriz) return null;
-    const matrizReal = dados.matriz;
-    const recuperacaoIntercompany = dados.recuperacaoIntercompany || new Array(12).fill(0);
-    const rateioRecebidoIntercompany = dados.rateioRecebidoIntercompany || new Array(12).fill(0);
-    const meses = dados.meses || ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    const d = dadosComIntercompanyCruzado;
+    if (!d || !d.matriz) return null;
+    const matrizReal = d.matriz;
+    const recuperacaoIntercompany = d.recuperacaoIntercompany || new Array(12).fill(0);
+    const rateioRecebidoIntercompany = d.rateioRecebidoIntercompany || new Array(12).fill(0);
+    const meses = d.meses || ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
     
     const LINHAS_DFC_GERENCIAL = [
       { key: "RECEITAS OPERACIONAIS", label: "RECEITAS OPERACIONAIS", tipo: "linha" },
@@ -268,7 +310,7 @@ function DFCContent() {
       set("(=) SALDO LÍQUIDO DO PERÍODO", saldoGerencial);
     }
     return matrizGerencial;
-  }, [dados]);
+  }, [dadosComIntercompanyCruzado]);
 
   const renderTabelaMensal = (matrizParaRenderizar, titulo, saldoInicialBase) => {
     if (!matrizParaRenderizar) return null;
