@@ -31,6 +31,28 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
   );
 }
 
+function Modal({ isOpen, onClose, title, children }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-acelerar-dark-blue border border-white/10 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between p-6 border-b border-white/10 bg-white/5">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <span className="w-1.5 h-6 bg-yellow-400 rounded-full"></span>
+            {title}
+          </h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DFCContent() {
   const [empresaAtiva, setEmpresaAtiva] = useState(null);
   const [dados, setDados] = useState(null);
@@ -38,13 +60,14 @@ function DFCContent() {
   const [visao, setVisao] = useState('Mensal');
   const [anoAtivo, setAnoAtivo] = useState(2026);
 
-  // CACHE DE DADOS POR EMPRESA PARA CONSOLIDAÇÃO
+  // CACHE DE DADOS POR EMPRESA PARA CONSOLIDAÇÃO E RATEIO
   const [cacheDados, setCacheDados] = useState({});
 
   // ESTADOS DO DETALHAMENTO
   const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null, grupoLabel: null });
   const [detalhamento, setDetalhamento] = useState([]);
   const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const empresas = [
     { nome: "VMC Tech", logo: "/logo_vmctech.png" },
@@ -154,12 +177,8 @@ function DFCContent() {
   };
 
   const carregarDetalhamento = async (mesIdx, grupoKey, grupoLabel) => {
-    if (selecionado.mesIdx === mesIdx && selecionado.grupoKey === grupoKey) {
-      setSelecionado({ mesIdx: null, grupoKey: null, grupoLabel: null });
-      setDetalhamento([]);
-      return;
-    }
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
+    setIsModalOpen(true);
     
     if (empresaAtiva === 'Consolidado') {
       const detalheConsolidado = empresas.map(emp => {
@@ -185,11 +204,19 @@ function DFCContent() {
     }
   };
 
+  const exportarExcel = (tipo) => {
+    alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
+  };
+
   const gerarDadosGerenciais = useMemo(() => {
     if (!dados || !dados.matriz) return null;
     const matrizReal = dados.matriz;
     const recuperacaoIntercompany = dados.recuperacaoIntercompany || new Array(12).fill(0);
     const meses = dados.meses || ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    
+    // Lógica de Rateio Recebido: No consolidado é 0. Em empresas individuais, é o que as outras recuperaram dela.
+    // Por enquanto, como a API não detalha o destino, vamos simular o rateio recebido para bLive, Victec e VMC (conforme planilha)
+    // TODO: Ajustar API para retornar rateio recebido real.
     const rateioRecebidoIntercompany = new Array(12).fill(0);
 
     const LINHAS_DFC_GERENCIAL = [
@@ -277,7 +304,6 @@ function DFCContent() {
                   <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
                     <td className={`p-3 text-[11px] ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                     {linha.valores.map((valor, mIdx) => {
-                      const isSelecionada = selecionado.mesIdx === mIdx && selecionado.grupoKey === linha.key;
                       const podeClicar = !isTotal || (linha.key.startsWith('(=)') && !linha.key.includes('SALDO')) || (empresaAtiva === 'Consolidado' && linha.key === 'SALDO_INICIAL');
                       return (
                         <td key={mIdx} className="p-0 relative group">
@@ -286,7 +312,7 @@ function DFCContent() {
                             disabled={!podeClicar}
                             className={`w-full h-full p-3 text-[11px] text-right transition-all duration-150 focus:outline-none
                               ${(valor || 0) < 0 ? 'text-red-400' : 'text-white'}
-                              ${isSelecionada ? 'ring-2 ring-inset ring-acelerar-light-blue bg-acelerar-light-blue/10' : podeClicar ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}
+                              ${podeClicar ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}
                             `}
                           >
                             {formatarMoeda(valor || 0)}
@@ -304,79 +330,79 @@ function DFCContent() {
     );
   };
 
-  const renderDetalhamento = () => {
+  const renderDetalhamentoModal = () => {
     const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
     const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
     const nomeGrupo = selecionado.grupoLabel;
     const isConsolidado = empresaAtiva === 'Consolidado';
 
     return (
-      <div className="space-y-4 animate-in fade-in duration-300">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-yellow-400 rounded-full"></span>
-          {isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'}
-          {nomeMes && nomeGrupo && (
-            <span className="ml-2 text-[10px] font-normal text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-              {nomeGrupo} • {nomeMes}/{anoAtivo}
-            </span>
-          )}
-        </h3>
-        {!selecionado.mesIdx && selecionado.mesIdx !== 0 ? (
-          <div className="flex items-center justify-center h-32 rounded-xl border border-dashed border-white/10 bg-white/5">
-            <p className="text-[10px] text-white/30 font-medium uppercase tracking-widest">Selecione uma célula para detalhar.</p>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        title={`${isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'} - ${nomeMes} / ${nomeGrupo}`}
+      >
+        <div className="space-y-6">
+          <div className="flex items-center justify-end gap-3">
+            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+              <button onClick={() => exportarExcel('exibicao')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Exportar Exibição</button>
+              <div className="w-px h-4 bg-white/10 self-center"></div>
+              <button onClick={() => exportarExcel('completo')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Histórico Completo</button>
+            </div>
           </div>
-        ) : loadingDetalhamento ? (
-          <div className="flex flex-col items-center justify-center h-32 space-y-3">
-            <div className="w-6 h-6 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">Buscando dados...</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white/5 text-[9px] text-white/50 uppercase font-bold tracking-widest">
-                  {isConsolidado ? (
-                    <>
-                      <th className="p-3 border-b border-white/10">Empresa</th>
-                      <th className="p-3 border-b border-white/10 text-right">Valor</th>
-                    </>
+          {loadingDetalhamento ? (
+            <div className="flex flex-col items-center justify-center h-64 space-y-3">
+              <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">Buscando dados...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white/5 text-[9px] text-white/50 uppercase font-bold tracking-widest">
+                    {isConsolidado ? (
+                      <>
+                        <th className="p-4 border-b border-white/10">Empresa</th>
+                        <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="p-4 border-b border-white/10">Data</th>
+                        <th className="p-4 border-b border-white/10">Nome</th>
+                        <th className="p-4 border-b border-white/10">Descrição</th>
+                        <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalhamento.length === 0 ? (
+                    <tr><td colSpan={isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
                   ) : (
-                    <>
-                      <th className="p-3 border-b border-white/10">Data</th>
-                      <th className="p-3 border-b border-white/10">Nome</th>
-                      <th className="p-3 border-b border-white/10">Descrição</th>
-                      <th className="p-3 border-b border-white/10 text-right">Valor</th>
-                    </>
+                    detalhamento.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
+                        {isConsolidado ? (
+                          <>
+                            <td className="p-4 text-[11px] text-white/80 font-medium">{item.nome}</td>
+                            <td className={`p-4 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-4 text-[11px] text-white/60 font-mono">{item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                            <td className="p-4 text-[11px] text-white/80 font-medium">{item.nome || '—'}</td>
+                            <td className="p-4 text-[11px] text-white/50 italic">{item.descricao || '—'}</td>
+                            <td className={`p-4 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))
                   )}
-                </tr>
-              </thead>
-              <tbody>
-                {detalhamento.length === 0 ? (
-                  <tr><td colSpan={isConsolidado ? 2 : 4} className="p-8 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
-                ) : (
-                  detalhamento.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
-                      {isConsolidado ? (
-                        <>
-                          <td className="p-3 text-[11px] text-white/80 font-medium">{item.nome}</td>
-                          <td className={`p-3 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="p-3 text-[11px] text-white/60 font-mono">{item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
-                          <td className="p-3 text-[11px] text-white/80 font-medium">{item.nome || '—'}</td>
-                          <td className="p-3 text-[11px] text-white/50 italic">{item.descricao || '—'}</td>
-                          <td className={`p-3 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
-                        </>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Modal>
     );
   };
 
@@ -408,7 +434,7 @@ function DFCContent() {
           <p className="text-[11px] font-medium uppercase tracking-widest">Selecione uma empresa na aba acima para visualizar o DFC.</p>
         </div>
       ) : (
-        <div className="flex-1 space-y-8">
+        <div className="flex-1 space-y-12">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 space-y-4">
               <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
@@ -418,11 +444,11 @@ function DFCContent() {
             <div className="space-y-12 animate-in fade-in duration-500">
               {renderTabelaMensal(dados.matriz, `DFC REAL - MOVIMENTAÇÕES BANCÁRIAS - ${empresaAtiva}`, dados.saldoInicial)}
               {renderTabelaMensal(matrizGerencialCalculada, `DFC GERENCIAL - CONSIDERANDO OPERAÇÕES INTERCOMPANY - ${empresaAtiva}`, dados.saldoInicial)}
-              {renderDetalhamento()}
             </div>
           ) : null}
         </div>
       )}
+      {renderDetalhamentoModal()}
     </div>
   );
 }
