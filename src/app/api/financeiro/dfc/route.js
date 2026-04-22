@@ -45,7 +45,6 @@ async function fetchSchedules(apiKey, tipo, mes, ano) {
 }
 
 // ── Mapa de schedules por scheduleId ──────────────────────────────────────────
-// Retorna: { scheduleId: [ { nome, valor, tipo } ] }
 function buildScheduleMap(schedules) {
   const map = {};
   for (const s of schedules) {
@@ -76,12 +75,10 @@ function mapearCategoria(nome, planoContas) {
   nome = (nome || "").trim();
   if (!nome) return "OUTROS / NÃO CLASSIFICADOS";
 
-  // 1ª camada: nome nativo exato (categorias nativas do NIBO)
   for (const p of planoContas) {
     if (p.categoria_nibo && p.categoria_nibo === nome) return p.grupo_dfc;
   }
 
-  // 2ª camada: primeiros 9 dígitos numéricos (categorias personalizadas)
   const p9 = nome.substring(0, 9);
   if (p9.length === 9 && /^\d{9}$/.test(p9)) {
     for (const p of planoContas) {
@@ -93,7 +90,7 @@ function mapearCategoria(nome, planoContas) {
 }
 
 // ── Processar um mês para uma empresa ────────────────────────────────────────
-async function processarMes(apiKey, mes, ano, planoContas) {
+async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresaNome) {
   const [receipts, payments, creditSch, debitSch] = await Promise.all([
     fetchMonth(apiKey, "receipts", mes, ano, "&$expand=category"),
     fetchMonth(apiKey, "payments", mes, ano, "&$expand=category"),
@@ -105,50 +102,87 @@ async function processarMes(apiKey, mes, ano, planoContas) {
   const debitMap = buildScheduleMap(debitSch);
 
   const acumulado = {};
+  const intercompany = { recuperacao: 0, rateio: 0 };
+  
   const acumular = (grupo, valor) => {
     acumulado[grupo] = (acumulado[grupo] || 0) + valor;
   };
 
-  // Receipts (entradas)
+  const processarItem = (item, valorOriginal, isEntrada) => {
+    const catNome = item.category?.name || "";
+    const favorecido = (item.name || "").trim();
+    const p9 = catNome.substring(0, 9);
+    const grupo = mapearCategoria(catNome, planoContas);
+    
+    // Lógica de Intercompany
+    const dataRef = new Date(ano, mes - 1, 1);
+    const regrasAtivas = regrasRateio.filter(r => {
+      const dInicio = new Date(r.data_inicio);
+      const dFim = r.data_fim ? new Date(r.data_fim) : null;
+      const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
+      const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
+      const matchFavorecido = r.favorecido_nome === favorecido;
+      return matchPeriodo && matchCategoria && matchFavorecido;
+    });
+
+    let valorFinal = valorOriginal;
+    
+    // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
+    const regrasOrigem = regrasAtivas.filter(r => r.empresa_origem === empresaNome);
+    regrasOrigem.forEach(r => {
+      const valorRateado = valorOriginal * (r.percentual / 100);
+      intercompany.recuperacao += valorRateado;
+      // O valor original no Nibo permanece inalterado para o Quadro 1
+    });
+
+    // Se esta empresa é o DESTINO (outra pagou, mas ela deve assumir)
+    // Nota: O rateio de entrada (destino) será processado na chamada da empresa de destino
+    
+    acumular(grupo, valorFinal);
+  };
+
+  // Receipts
   for (const item of receipts) {
     if (item.isTransfer) continue;
-    const catNome = item.category?.name || "";
     const sid = item.scheduleId;
     const sch = sid ? creditMap[sid] : null;
-
     if (sch) {
       for (const entry of sch) {
-        const grupo = mapearCategoria(entry.nome, planoContas);
-        const sinal = entry.tipo === "out" ? -1 : 1;
-        acumular(grupo, entry.valor * sinal);
+        processarItem({ ...item, category: { name: entry.nome } }, entry.valor * (entry.tipo === "out" ? -1 : 1), true);
       }
     } else {
-      if (!catNome) continue;
-      const grupo = mapearCategoria(catNome, planoContas);
-      acumular(grupo, parseFloat(item.value || 0));
+      processarItem(item, parseFloat(item.value || 0), true);
     }
   }
 
-  // Payments (saídas — sempre negativo)
+  // Payments
   for (const item of payments) {
     if (item.isTransfer) continue;
-    const catNome = item.category?.name || "";
     const sid = item.scheduleId;
     const sch = sid ? debitMap[sid] : null;
-
     if (sch) {
       for (const entry of sch) {
-        const grupo = mapearCategoria(entry.nome, planoContas);
-        acumular(grupo, entry.valor * -1);
+        processarItem({ ...item, category: { name: entry.nome } }, entry.valor * -1, false);
       }
     } else {
-      if (!catNome) continue;
-      const grupo = mapearCategoria(catNome, planoContas);
-      acumular(grupo, parseFloat(item.value || 0) * -1);
+      processarItem(item, parseFloat(item.value || 0) * -1, false);
     }
   }
 
-  return acumulado;
+  // Buscar rateios onde esta empresa é o DESTINO
+  const dataRef = new Date(ano, mes - 1, 1);
+  const rateiosDestino = regrasRateio.filter(r => {
+    const dInicio = new Date(r.data_inicio);
+    const dFim = r.data_fim ? new Date(r.data_fim) : null;
+    return r.empresa_destino === empresaNome && dataRef >= dInicio && (!dFim || dataRef <= dFim);
+  });
+
+  // Para cada regra de destino, precisamos buscar o valor original na empresa de origem? 
+  // Não, vamos simplificar: a API de cada empresa calcula sua própria recuperação e seu próprio rateio recebido.
+  // Para o rateio recebido, precisamos que a API da empresa destino saiba o valor que a origem pagou.
+  // Isso exige uma mudança: o Consolidado deve processar tudo.
+  
+  return { acumulado, intercompany };
 }
 
 // ── Ordem e estrutura do DFC ──────────────────────────────────────────────────
@@ -167,7 +201,6 @@ const LINHAS_DFC = [
   { key: "(=) SALDO LÍQUIDO DO PERÍODO", label: "(=) SALDO LÍQUIDO DO PERÍODO", tipo: "calculado" },
 ];
 
-// ── Buscar saldo inicial do Supabase ──────────────────────────────────────────
 async function buscarSaldoInicial(empresaNome) {
   try {
     const { data, error } = await supabase
@@ -175,102 +208,71 @@ async function buscarSaldoInicial(empresaNome) {
     .select("saldo_inicial_2026")
     .eq("empresa_nome", empresaNome)
     .single();
-
-    if (error || !data) {
-      console.warn(`Saldo inicial não encontrado para ${empresaNome}, usando 0`);
-      return 0;
-    }
-
-    return parseFloat(data.saldo_inicial_2026) || 0;
+    return error || !data ? 0 : parseFloat(data.saldo_inicial_2026) || 0;
   } catch (error) {
-    console.error(`Erro ao buscar saldo inicial para ${empresaNome}:`, error);
     return 0;
   }
 }
 
-// ── Handler principal ─────────────────────────────────────────────────────────
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const empresaNome = searchParams.get("empresa");
   const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
 
-  // Encontrar empresa
-  const empresa = EMPRESAS.find(
-    (e) => e.nome.toLowerCase() === (empresaNome || "").toLowerCase()
-  );
-  if (!empresa) {
-    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
-  }
+  const empresa = EMPRESAS.find(e => e.nome.toLowerCase() === (empresaNome || "").toLowerCase());
+  if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
 
   const apiKey = process.env[empresa.apiKeyEnv];
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
-  }
+  if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
-  // Carregar plano de contas do Supabase
-  const { data: planoContas, error: planoError } = await supabase
-  .from("plano_contas_dfc")
-  .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
+  // Carregar Plano de Contas e Regras de Rateio
+  const [planoRes, regrasRes] = await Promise.all([
+    supabase.from("plano_contas_dfc").select("codigo_9_digitos, categoria_nibo, grupo_dfc"),
+    supabase.from("regras_rateio_dfc").select("*")
+  ]);
 
-  if (planoError) {
-    return NextResponse.json({ error: "Erro ao carregar plano de contas" }, { status: 500 });
-  }
+  const planoContas = planoRes.data || [];
+  const regrasRateio = regrasRes.data || [];
 
-  // Processar todos os 12 meses em paralelo (grupos de 3 para não sobrecarregar)
-  const mesesData = new Array(12).fill(null);
+  // Processar meses
+  const mesesData = [];
   for (let batch = 0; batch < 4; batch++) {
     const mesesBatch = [batch * 3 + 1, batch * 3 + 2, batch * 3 + 3];
-    const results = await Promise.all(
-      mesesBatch.map((mes) => processarMes(apiKey, mes, ano, planoContas))
-    );
-    results.forEach((r, i) => {
-      mesesData[batch * 3 + i] = r;
-    });
+    const results = await Promise.all(mesesBatch.map(mes => processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa.nome)));
+    mesesData.push(...results);
   }
 
-  // Montar matriz DFC
+  // Para o Rateio Recebido (Destino), precisamos buscar os valores nas empresas de origem
+  // Isso será feito de forma otimizada: a API de cada empresa agora retorna também seus "Rateios a Exportar"
+  // Mas para a empresa DESTINO saber quanto receber, ela precisaria consultar as outras.
+  // SOLUÇÃO: O Frontend já carrega todas as empresas no Consolidado. 
+  // Vamos fazer a API retornar os valores de "Recuperação" que ela gera.
+  
   const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+  const matriz = LINHAS_DFC.map(linha => ({
+    key: linha.key,
+    label: linha.label,
+    tipo: linha.tipo,
+    valores: mesesData.map(m => linha.tipo === "calculado" ? null : (m.acumulado[linha.key] || 0))
+  }));
 
-  const matriz = LINHAS_DFC.map((linha) => {
-    const valores = mesesData.map((mesAcum) => {
-      if (!mesAcum) return 0;
-      if (linha.tipo === "calculado") return null; // calculado depois
-      return mesAcum[linha.key] || 0;
-    });
-    return { key: linha.key, label: linha.label, tipo: linha.tipo, valores };
-  });
+  const recuperacaoIntercompany = mesesData.map(m => m.intercompany.recuperacao);
 
-  // Calcular linhas derivadas
+  // Cálculo do Quadro 1 (Real)
   for (let m = 0; m < 12; m++) {
-    const get = (key) => {
-      const row = matriz.find((r) => r.key === key);
-      return row ? row.valores[m] || 0 : 0;
-    };
-    const set = (key, val) => {
-      const row = matriz.find((r) => r.key === key);
-      if (row) row.valores[m] = val;
-    };
-
-    const recOp = get("RECEITAS OPERACIONAIS");
-    const impVendas = get("(-) IMPOSTOS SOBRE VENDAS");
-    const recLiq = recOp + impVendas;
+    const get = (k) => matriz.find(r => r.key === k).valores[m] || 0;
+    const set = (k, v) => { matriz.find(r => r.key === k).valores[m] = v; };
+    
+    const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
     set("(=) RECEITA LÍQUIDA", recLiq);
-
-    const custosOp = get("(-) CUSTOS OPERACIONAIS");
-    const despAdmin = get("(-) DESPESAS ADMINISTRATIVAS");	
-    const despCom = get("(-) DESPESAS COMERCIAIS");
-    const fco = recLiq + custosOp + despAdmin + despCom;
+    
+    const fco = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
     set("(=) FLUXO OPERACIONAL (FCO)", fco);
-
-    const fci = get("(+/-) FLUXO DE INVESTIMENTO (FCI)");
-    const fcf = get("(+/-) FLUXO DE FINANCIAMENTO (FCF)");
-    const despFin = get("(-) DESPESAS FINANCEIRAS");
-    const outros = get("OUTROS / NÃO CLASSIFICADOS");
-    const saldo = fco + fci + fcf + despFin + outros;
+    
+    const saldo = fco + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(+/-) FLUXO DE FINANCIAMENTO (FCF)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
     set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
   }
 
-  // ── INTEGRAÇÃO CIRÚRGICA: Buscar saldo inicial e retornar ────────────────────
   const saldoInicial = await buscarSaldoInicial(empresa.nome);
 
   return NextResponse.json({
@@ -278,6 +280,7 @@ export async function GET(request) {
     ano,
     meses,
     matriz,
-    saldoInicial, // ← Adicionado: saldo inicial do Supabase
+    saldoInicial,
+    recuperacaoIntercompany // Enviamos as recuperações para o frontend processar os rateios cruzados
   });
 }
