@@ -92,8 +92,8 @@ function mapearCategoria(nome, planoContas) {
 // ── Processar um mês para uma empresa ────────────────────────────────────────
 async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresaNome) {
   const [receipts, payments, creditSch, debitSch] = await Promise.all([
-    fetchMonth(apiKey, "receipts", mes, ano, "&$expand=category"),
-    fetchMonth(apiKey, "payments", mes, ano, "&$expand=category"),
+    fetchMonth(apiKey, "receipts", mes, ano, "&$expand=category,stakeholder"),
+    fetchMonth(apiKey, "payments", mes, ano, "&$expand=category,stakeholder"),
     fetchSchedules(apiKey, "credit", mes, ano),
     fetchSchedules(apiKey, "debit", mes, ano),
   ]);
@@ -110,13 +110,15 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
 
   const processarItem = (item, valorOriginal, isEntrada) => {
     const catNome = item.category?.name || "";
-    const favorecido = (item.name || "").trim();
+    const favorecido = (item.stakeholder?.name || item.name || "").trim();
     const p9 = catNome.substring(0, 9);
     const grupo = mapearCategoria(catNome, planoContas);
     
     // Lógica de Intercompany
     const dataRef = new Date(ano, mes - 1, 1);
-    const regrasAtivas = regrasRateio.filter(r => {
+    
+    // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
+    const regrasOrigem = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
@@ -127,10 +129,8 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaOrigem;
     });
 
-    // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
-    const regrasOrigem = regrasAtivas.filter(r => (r.empresa_origem || '').trim() === empresaNome.trim());
     regrasOrigem.forEach(r => {
-      const valorRateado = valorOriginal * (r.percentual / 100);
+      const valorRateado = Math.abs(valorOriginal) * (r.percentual / 100);
       intercompany.recuperacao += valorRateado; // Acumula o valor a ser recuperado
     });
 
@@ -145,8 +145,9 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
 
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaDestino;
     });
+
     regrasDestino.forEach(r => {
-      const valorRateado = valorOriginal * (r.percentual / 100);
+      const valorRateado = Math.abs(valorOriginal) * (r.percentual / 100);
       intercompany.rateioRecebido += valorRateado; // Acumula o valor a ser recebido
     });
 
