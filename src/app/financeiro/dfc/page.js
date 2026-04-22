@@ -151,14 +151,14 @@ function DFCContent() {
 
     const saldoInicialConsolidado = Object.values(cache).reduce((acc, emp) => acc + (emp.saldoInicial || 0), 0);
     const recuperacaoIntercompanyConsolidada = new Array(12).fill(0);
-    const rateioRecebidoIntercompanyConsolidado = new Array(12).fill(0);
+    const rateioRecebidoIntercompanyConsolidada = new Array(12).fill(0);
 
     Object.values(cache).forEach(empresaData => {
       empresaData.recuperacaoIntercompany?.forEach((v, i) => {
         recuperacaoIntercompanyConsolidada[i] += (v || 0);
       });
       empresaData.rateioRecebidoIntercompany?.forEach((v, i) => {
-        rateioRecebidoIntercompanyConsolidado[i] += (v || 0);
+        rateioRecebidoIntercompanyConsolidada[i] += (v || 0);
       });
     });
 
@@ -167,7 +167,7 @@ function DFCContent() {
       saldoInicial: saldoInicialConsolidado,
       matriz: matrizConsolidada,
       recuperacaoIntercompany: recuperacaoIntercompanyConsolidada,
-      rateioRecebidoIntercompany: rateioRecebidoIntercompanyConsolidado
+      rateioRecebidoIntercompany: rateioRecebidoIntercompanyConsolidada
     };
   };
 
@@ -218,7 +218,8 @@ function DFCContent() {
     const saldosFinais = [];
     let saldoAcumulado = saldoInicial;
     for (let m = 0; m < 12; m++) {
-      const saldoLiquidoPeriodo = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO").valores[m];
+      const linhaSaldoLiquido = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO");
+      const saldoLiquidoPeriodo = linhaSaldoLiquido ? linhaSaldoLiquido.valores[m] : 0;
       saldoAcumulado += saldoLiquidoPeriodo;
       saldosFinais[m] = saldoAcumulado;
     }
@@ -290,7 +291,7 @@ function DFCContent() {
     if (!dfcData || !dfcData.matriz) return null;
 
     const { matriz, saldosFinais } = dfcData;
-    const saldoInicial = isGerencial ? (dfcData.saldoInicial || 0) : dados.saldoInicial;
+    const saldoInicial = isGerencial ? (dados.saldoInicial || 0) : dados.saldoInicial;
 
     return (
       <div className="overflow-x-auto">
@@ -397,7 +398,14 @@ function DFCContent() {
               <option value={2025}>2025</option>
             </select>
           </div>
-          {/* Botões Mensal/Acumulado - Removido */}
+          <div className="flex items-center space-x-2">
+            <button
+              className={`px-3 py-1 rounded-md text-[11px] ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}
+              onClick={() => setVisao('Mensal')}
+            >
+              Mensal
+            </button>
+          </div>
         </div>
       </div>
 
@@ -505,16 +513,4 @@ export default function DFC() {
       <DFCContent />
     </Suspense>
   );
-}
-
-  const gerarSaldosFinais = (matriz, saldoInicial) => {
-    const saldosFinais = [];
-    let saldoAcumulado = saldoInicial;
-    for (let m = 0; m < 12; m++) {
-      const saldoLiquidoPeriodo = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO").valores[m];
-      saldoAcumulado += saldoLiquidoPeriodo;
-      saldosFinais[m] = saldoAcumulado;
-    }
-    return saldosFinais;
-  };
 }
