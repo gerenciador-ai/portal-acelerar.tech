@@ -120,8 +120,8 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
-      const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
-      const matchFavorecido = r.favorecido_nome === favorecido;
+      const matchCategoria = (r.categoria_nibo || '').trim().toLowerCase() === (p9 || '').trim().toLowerCase() || (r.categoria_nibo || '').trim().toLowerCase() === (catNome || '').trim().toLowerCase();
+      const matchFavorecido = (r.favorecido_nome || '').trim().toLowerCase() === (favorecido || '').trim().toLowerCase();
       const matchEmpresaOrigem = (r.empresa_origem || '').trim() === empresaNome.trim();
 
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaOrigem;
@@ -139,8 +139,8 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
-      const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
-      const matchFavorecido = r.favorecido_nome === favorecido;
+      const matchCategoria = (r.categoria_nibo || '').trim().toLowerCase() === (p9 || '').trim().toLowerCase() || (r.categoria_nibo || '').trim().toLowerCase() === (catNome || '').trim().toLowerCase();
+      const matchFavorecido = (r.favorecido_nome || '').trim().toLowerCase() === (favorecido || '').trim().toLowerCase();
       const matchEmpresaDestino = (r.empresa_destino || '').trim() === empresaNome.trim();
 
       return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaDestino;
