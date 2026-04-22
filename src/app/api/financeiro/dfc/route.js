@@ -18,7 +18,7 @@ const EMPRESAS = [
   { nome: "Acelerar", apiKeyEnv: "NIBO_API_KEY_ACELERAR" },
   { nome: "bLive", apiKeyEnv: "NIBO_API_KEY_BLIVE" },
   { nome: "Condway", apiKeyEnv: "NIBO_API_KEY_CONDWAY" },
-  { nome: "Isket", apiKeyEnv: "NIBO_API_KEY_ISKET" },
+  { nome: "Isket", apiKeyEnv: "NIBO_API_KEY_ISKET" }
 ];
 
 // ── Busca paginada mensal ─────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
   const debitMap = buildScheduleMap(debitSch);
 
   const acumulado = {};
-  const intercompany = { recuperacao: 0, rateio: 0 };
+  const intercompany = { recuperacao: 0, rateioRecebido: 0 };
   
   const acumular = (grupo, valor) => {
     acumulado[grupo] = (acumulado[grupo] || 0) + valor;
@@ -113,6 +113,7 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     const favorecido = (item.name || "").trim();
     const p9 = catNome.substring(0, 9);
     const grupo = mapearCategoria(catNome, planoContas);
+    console.log(`Processando item: Categoria Nibo: ${catNome}, Favorecido: ${favorecido}, Valor: ${valorOriginal}`);
     
     // Lógica de Intercompany
     const dataRef = new Date(ano, mes - 1, 1);
@@ -122,23 +123,20 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
       const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
       const matchFavorecido = r.favorecido_nome === favorecido;
+      if (matchPeriodo && matchCategoria && matchFavorecido) {
+        console.log(`  Regra Ativa Encontrada: ${JSON.stringify(r)}`);
+      }
       return matchPeriodo && matchCategoria && matchFavorecido;
     });
 
-    let valorFinal = valorOriginal;
-    
     // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
     const regrasOrigem = regrasAtivas.filter(r => r.empresa_origem === empresaNome);
     regrasOrigem.forEach(r => {
       const valorRateado = valorOriginal * (r.percentual / 100);
-      intercompany.recuperacao += valorRateado;
-      // O valor original no Nibo permanece inalterado para o Quadro 1
+      intercompany.recuperacao += valorRateado; // Acumula o valor a ser recuperado
     });
 
-    // Se esta empresa é o DESTINO (outra pagou, mas ela deve assumir)
-    // Nota: O rateio de entrada (destino) será processado na chamada da empresa de destino
-    
-    acumular(grupo, valorFinal);
+    acumular(grupo, valorOriginal); // Acumula o valor original para o DFC Real
   };
 
   // Receipts
@@ -168,19 +166,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       processarItem(item, parseFloat(item.value || 0) * -1, false);
     }
   }
-
-  // Buscar rateios onde esta empresa é o DESTINO
-  const dataRef = new Date(ano, mes - 1, 1);
-  const rateiosDestino = regrasRateio.filter(r => {
-    const dInicio = new Date(r.data_inicio);
-    const dFim = r.data_fim ? new Date(r.data_fim) : null;
-    return r.empresa_destino === empresaNome && dataRef >= dInicio && (!dFim || dataRef <= dFim);
-  });
-
-  // Para cada regra de destino, precisamos buscar o valor original na empresa de origem? 
-  // Não, vamos simplificar: a API de cada empresa calcula sua própria recuperação e seu próprio rateio recebido.
-  // Para o rateio recebido, precisamos que a API da empresa destino saiba o valor que a origem pagou.
-  // Isso exige uma mudança: o Consolidado deve processar tudo.
   
   return { acumulado, intercompany };
 }
@@ -233,6 +218,7 @@ export async function GET(request) {
 
   const planoContas = planoRes.data || [];
   const regrasRateio = regrasRes.data || [];
+  console.log("Regras de Rateio Carregadas do Supabase:", JSON.stringify(regrasRateio, null, 2));
 
   // Processar meses
   const mesesData = [];
@@ -242,12 +228,6 @@ export async function GET(request) {
     mesesData.push(...results);
   }
 
-  // Para o Rateio Recebido (Destino), precisamos buscar os valores nas empresas de origem
-  // Isso será feito de forma otimizada: a API de cada empresa agora retorna também seus "Rateios a Exportar"
-  // Mas para a empresa DESTINO saber quanto receber, ela precisaria consultar as outras.
-  // SOLUÇÃO: O Frontend já carrega todas as empresas no Consolidado. 
-  // Vamos fazer a API retornar os valores de "Recuperação" que ela gera.
-  
   const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
   const matriz = LINHAS_DFC.map(linha => ({
     key: linha.key,
