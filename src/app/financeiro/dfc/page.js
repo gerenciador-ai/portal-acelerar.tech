@@ -214,6 +214,17 @@ function DFCContent() {
     alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
   };
 
+  const gerarSaldosFinais = (matriz, saldoInicial) => {
+    const saldosFinais = [];
+    let saldoAcumulado = saldoInicial;
+    for (let m = 0; m < 12; m++) {
+      const saldoLiquidoPeriodo = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO").valores[m];
+      saldoAcumulado += saldoLiquidoPeriodo;
+      saldosFinais[m] = saldoAcumulado;
+    }
+    return saldosFinais;
+  };
+
   const gerarDadosGerenciais = useMemo(() => {
     if (!dados || !dados.matriz) return null;
     const matrizReal = dados.matriz;
@@ -280,8 +291,6 @@ function DFCContent() {
 
     const { matriz, saldosFinais } = dfcData;
     const saldoInicial = isGerencial ? (dfcData.saldoInicial || 0) : dados.saldoInicial;
-
-    let saldoAcumulado = saldoInicial;
 
     return (
       <div className="overflow-x-auto">
@@ -388,20 +397,7 @@ function DFCContent() {
               <option value={2025}>2025</option>
             </select>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              className={`px-3 py-1 rounded-md text-[11px] ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}
-              onClick={() => setVisao('Mensal')}
-            >
-              Mensal
-            </button>
-            <button
-              className={`px-3 py-1 rounded-md text-[11px] ${visao === 'Acumulado' ? 'bg-acelerar-light-blue text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}
-              onClick={() => setVisao('Acumulado')}
-            >
-              Acumulado
-            </button>
-          </div>
+          {/* Botões Mensal/Acumulado - Removido */}
         </div>
       </div>
 
@@ -478,7 +474,7 @@ function DFCContent() {
                   {detalhamento.length > 0 ? (
                     detalhamento.map((item, idx) => (
                       <tr key={idx} className="bg-acelerar-dark-blue hover:bg-white/10">
-                        <td className="px-2 py-1 text-left text-[11px]">{item.date}</td>
+                        <td className="px-2 py-1 text-left text-[11px]">{item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
                         <td className="px-2 py-1 text-left text-[11px]">{item.description}</td>
                         <td className="px-2 py-1 text-left text-[11px]">{item.category}</td>
                         <td className={`px-2 py-1 text-right text-[11px] ${item.value < 0 ? 'text-red-500' : ''}`}>{formatarMoeda(item.value)}</td>
@@ -503,21 +499,22 @@ function DFCContent() {
   );
 }
 
-const gerarSaldosFinais = (matriz, saldoInicial) => {
-  const saldosFinais = [];
-  let saldoAcumulado = saldoInicial;
-  for (let m = 0; m < 12; m++) {
-    const saldoLiquidoPeriodo = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO").valores[m];
-    saldoAcumulado += saldoLiquidoPeriodo;
-    saldosFinais[m] = saldoAcumulado;
-  }
-  return saldosFinais;
-};
-
 export default function DFC() {
   return (
     <Suspense fallback={<div>Carregando...</div>}>
       <DFCContent />
     </Suspense>
   );
+}
+
+  const gerarSaldosFinais = (matriz, saldoInicial) => {
+    const saldosFinais = [];
+    let saldoAcumulado = saldoInicial;
+    for (let m = 0; m < 12; m++) {
+      const saldoLiquidoPeriodo = matriz.find(r => r.key === "(=) SALDO LÍQUIDO DO PERÍODO").valores[m];
+      saldoAcumulado += saldoLiquidoPeriodo;
+      saldosFinais[m] = saldoAcumulado;
+    }
+    return saldosFinais;
+  };
 }
