@@ -218,7 +218,11 @@ export async function GET(request) {
 
   const planoContas = planoRes.data || [];
   const regrasRateio = regrasRes.data || [];
-  console.log("Regras de Rateio Carregadas do Supabase:", JSON.stringify(regrasRateio, null, 2));
+
+  // DEBUG: Retorna as regras de rateio para inspeção direta no navegador
+  if (empresaNome === "Victec" && ano === 2026) {
+    return NextResponse.json({ debug: "Regras de Rateio", regrasRateio });
+  }
 
   // Processar meses
   const mesesData = [];
