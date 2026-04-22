@@ -113,7 +113,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     const favorecido = (item.name || "").trim();
     const p9 = catNome.substring(0, 9);
     const grupo = mapearCategoria(catNome, planoContas);
-    console.log(`Processando item: Categoria Nibo: ${catNome}, Favorecido: ${favorecido}, Valor: ${valorOriginal}`);
     
     // Lógica de Intercompany
     const dataRef = new Date(ano, mes - 1, 1);
@@ -123,17 +122,32 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
       const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
       const matchFavorecido = r.favorecido_nome === favorecido;
-      if (matchPeriodo && matchCategoria && matchFavorecido) {
-        console.log(`  Regra Ativa Encontrada: ${JSON.stringify(r)}`);
-      }
-      return matchPeriodo && matchCategoria && matchFavorecido;
+      const matchEmpresaOrigem = (r.empresa_origem || '').trim() === empresaNome.trim();
+
+      return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaOrigem;
     });
 
     // Se esta empresa é a ORIGEM (ela pagou, mas quer recuperar)
-    const regrasOrigem = regrasAtivas.filter(r => r.empresa_origem === empresaNome);
+    const regrasOrigem = regrasAtivas.filter(r => (r.empresa_origem || '').trim() === empresaNome.trim());
     regrasOrigem.forEach(r => {
       const valorRateado = valorOriginal * (r.percentual / 100);
       intercompany.recuperacao += valorRateado; // Acumula o valor a ser recuperado
+    });
+
+    // Se esta empresa é o DESTINO (ela deve receber o rateio)
+    const regrasDestino = regrasRateio.filter(r => {
+      const dInicio = new Date(r.data_inicio);
+      const dFim = r.data_fim ? new Date(r.data_fim) : null;
+      const matchPeriodo = dataRef >= dInicio && (!dFim || dataRef <= dFim);
+      const matchCategoria = r.categoria_nibo === p9 || r.categoria_nibo === catNome;
+      const matchFavorecido = r.favorecido_nome === favorecido;
+      const matchEmpresaDestino = (r.empresa_destino || '').trim() === empresaNome.trim();
+
+      return matchPeriodo && matchCategoria && matchFavorecido && matchEmpresaDestino;
+    });
+    regrasDestino.forEach(r => {
+      const valorRateado = valorOriginal * (r.percentual / 100);
+      intercompany.rateioRecebido += valorRateado; // Acumula o valor a ser recebido
     });
 
     acumular(grupo, valorOriginal); // Acumula o valor original para o DFC Real
@@ -219,11 +233,6 @@ export async function GET(request) {
   const planoContas = planoRes.data || [];
   const regrasRateio = regrasRes.data || [];
 
-  // DEBUG: Retorna as regras de rateio para inspeção direta no navegador
-  if (empresaNome === "Victec" && ano === 2026) {
-    return NextResponse.json({ debug: "Regras de Rateio", regrasRateio });
-  }
-
   // Processar meses
   const mesesData = [];
   for (let batch = 0; batch < 4; batch++) {
@@ -241,6 +250,7 @@ export async function GET(request) {
   }));
 
   const recuperacaoIntercompany = mesesData.map(m => m.intercompany.recuperacao);
+  const rateioRecebidoIntercompany = mesesData.map(m => m.intercompany.rateioRecebido);
 
   // Cálculo do Quadro 1 (Real)
   for (let m = 0; m < 12; m++) {
@@ -265,6 +275,7 @@ export async function GET(request) {
     meses,
     matriz,
     saldoInicial,
-    recuperacaoIntercompany // Enviamos as recuperações para o frontend processar os rateios cruzados
+    recuperacaoIntercompany,
+    rateioRecebidoIntercompany
   });
 }
