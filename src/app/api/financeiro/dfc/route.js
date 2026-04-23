@@ -96,8 +96,7 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
   const intercompany = { 
     recuperacao: 0, 
     rateioRecebido: 0,
-    // NOVO: Mapeamento detalhado para o frontend cruzar os dados
-    detalheRecuperacao: {} // { "VMC Tech": [0,0,0...12 meses] }
+    detalheRecuperacao: [] // NOVO: Agora é uma lista de objetos detalhados
   };
   
   const acumular = (grupo, valor) => {
@@ -126,14 +125,18 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       const valorRateado = Math.abs(valorOriginal) * (parseFloat(r.percentual || 0) / 100);
       intercompany.recuperacao += valorRateado;
       
-      // Guarda quem é o destino para o frontend poder "avisar" a outra empresa
-      const dest = (r.empresa_destino || "").trim();
-      if (dest) {
-        intercompany.detalheRecuperacao[dest] = (intercompany.detalheRecuperacao[dest] || 0) + valorRateado;
-      }
+      // Guarda o detalhamento completo para o frontend
+      intercompany.detalheRecuperacao.push({
+        categoria: catNome,
+        favorecido: favorecido,
+        empresa_origem: empresaNome,
+        empresa_destino: (r.empresa_destino || "").trim(),
+        percentual: parseFloat(r.percentual || 0),
+        valor: valorRateado
+      });
     });
 
-    // 2. RATEIO RECEBIDO: O que outros pagaram e eu devo (Funciona se as outras empresas forem carregadas)
+    // 2. RATEIO RECEBIDO: O que outros pagaram e eu devo
     const regrasDestino = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
@@ -258,6 +261,6 @@ export async function GET(request) {
     saldoInicial,
     recuperacaoIntercompany,
     rateioRecebidoIntercompany,
-    detalheRecuperacao // NOVO: Enviado para o frontend cruzar os dados
+    detalheRecuperacao
   });
 }
