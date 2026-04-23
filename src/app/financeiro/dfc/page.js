@@ -100,7 +100,7 @@ function DFCContent() {
       setDados(data);
       setCacheDados(prev => ({ ...prev, [nomeEmpresa]: data }));
 
-      // DISPARA CARGA DAS OUTRAS EM BACKGROUND PARA INTERCOMPANY (Lógica do ajuste integrada)
+      // DISPARA CARGA DAS OUTRAS EM BACKGROUND PARA INTERCOMPANY
       const empresasParaCarregar = empresas.filter(e => e.nome !== nomeEmpresa && !cacheDados[e.nome]);
       if (empresasParaCarregar.length > 0) {
         Promise.all(empresasParaCarregar.map(async (emp) => {
@@ -203,6 +203,24 @@ function DFCContent() {
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
     setIsModalOpen(true);
     
+    // 1. LÓGICA PARA LINHAS INTERCOMPANY (NOVO)
+    if (grupoKey === "(+) RECUPERAÇÃO INTERCOMPANY" || grupoKey === "(-) RATEIO RECEBIDO INTERCOMPANY") {
+      setLoadingDetalhamento(true);
+      setDetalhamento([]);
+      try {
+        const mes = mesIdx + 1;
+        const res = await fetch(`/api/financeiro/dfc/detalhamento-intercompany?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&tipo=${grupoKey.includes('RECUPERAÇÃO') ? 'recuperacao' : 'rateio'}`);
+        const data = await res.json();
+        setDetalhamento(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Erro ao carregar detalhamento intercompany:', error);
+      } finally {
+        setLoadingDetalhamento(false);
+      }
+      return;
+    }
+
+    // 2. LÓGICA PARA CONSOLIDADO (EXISTENTE)
     if (empresaAtiva === 'Consolidado') {
       const detalheConsolidado = empresas.map(emp => {
         const dadosEmpresa = cacheDados[emp.nome];
@@ -212,6 +230,7 @@ function DFCContent() {
       }).filter(item => item.valor !== 0);
       setDetalhamento(detalheConsolidado);
     } else {
+      // 3. LÓGICA PARA LANÇAMENTOS REAIS (EXISTENTE)
       setLoadingDetalhamento(true);
       setDetalhamento([]);
       try {
@@ -231,22 +250,19 @@ function DFCContent() {
     alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
   };
 
-  // ── RECONCILIAÇÃO INTERCOMPANY CRUZADA (Lógica integrada do ajuste) ──────────
+  // ── RECONCILIAÇÃO INTERCOMPANY CRUZADA ─────────────────────────────────────
   const dadosComIntercompanyCruzado = useMemo(() => {
     if (!dados || !dados.matriz || empresaAtiva === 'Consolidado') return dados;
     const d = JSON.parse(JSON.stringify(dados));
     const nomeAtual = empresaAtiva.trim();
     
-    // O rateio recebido da empresa atual é a soma de tudo que as OUTRAS empresas recuperaram DELA
     const novoRateioRecebido = new Array(12).fill(0);
 
     Object.keys(cacheDados).forEach(nomeOutra => {
       if (nomeOutra.trim() === nomeAtual) return;
       const dadosOutra = cacheDados[nomeOutra];
-      // detalheRecuperacao é um array de 12 meses, onde cada mês é um objeto { "Destino": valor }
       if (dadosOutra.detalheRecuperacao) {
         dadosOutra.detalheRecuperacao.forEach((mesObj, idx) => {
-          // Procura se a empresa atual (nomeAtual) está nos destinos de recuperação da outra empresa
           const valorParaMim = mesObj[nomeAtual] || 0;
           novoRateioRecebido[idx] += valorParaMim;
         });
@@ -354,7 +370,7 @@ function DFCContent() {
                   <tr key={linha.key} className={`hover:bg-white/5 transition-colors ${isTotal ? 'bg-acelerar-light-blue/10 font-bold' : ''}`}>
                     <td className={`p-3 text-[11px] ${isTotal ? 'text-acelerar-light-blue' : 'text-white/80'}`}>{linha.label}</td>
                     {linha.valores.map((valor, mIdx) => {
-                      const podeClicar = !isTotal || (linha.key.startsWith('(=)') && !linha.key.includes('SALDO')) || (empresaAtiva === 'Consolidado' && linha.key === 'SALDO_INICIAL');
+                      const podeClicar = !isTotal || (linha.key.startsWith('(=)') && !linha.key.includes('SALDO')) || (empresaAtiva === 'Consolidado' && linha.key === 'SALDO_INICIAL') || (linha.key.includes('INTERCOMPANY'));
                       return (
                         <td key={mIdx} className="p-0 relative group">
                           <button
@@ -385,12 +401,13 @@ function DFCContent() {
     const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
     const nomeGrupo = selecionado.grupoLabel;
     const isConsolidado = empresaAtiva === 'Consolidado';
+    const isIntercompany = selecionado.grupoKey?.includes('INTERCOMPANY');
 
     return (
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)}
-        title={`${isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'} - ${nomeMes} / ${nomeGrupo}`}
+        title={`${isIntercompany ? 'Detalhamento de Regras Intercompany' : isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'} - ${nomeMes} / ${nomeGrupo}`}
       >
         <div className="space-y-6">
           <div className="flex items-center justify-end gap-3">
@@ -410,7 +427,15 @@ function DFCContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-white/5 text-[9px] text-white/50 uppercase font-bold tracking-widest">
-                    {isConsolidado ? (
+                    {isIntercompany ? (
+                      <>
+                        <th className="p-4 border-b border-white/10">Categoria</th>
+                        <th className="p-4 border-b border-white/10">Empresa de Origem</th>
+                        <th className="p-4 border-b border-white/10">Empresa de Destino</th>
+                        <th className="p-4 border-b border-white/10 text-center">Percentual</th>
+                        <th className="p-4 border-b border-white/10 text-right">Valor</th>
+                      </>
+                    ) : isConsolidado ? (
                       <>
                         <th className="p-4 border-b border-white/10">Empresa</th>
                         <th className="p-4 border-b border-white/10 text-right">Valor</th>
@@ -427,11 +452,19 @@ function DFCContent() {
                 </thead>
                 <tbody>
                   {detalhamento.length === 0 ? (
-                    <tr><td colSpan={isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
+                    <tr><td colSpan={isIntercompany ? 5 : isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
                   ) : (
                     detalhamento.map((item, idx) => (
                       <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
-                        {isConsolidado ? (
+                        {isIntercompany ? (
+                          <>
+                            <td className="p-4 text-[11px] text-white/80 font-medium">{item.categoria}</td>
+                            <td className="p-4 text-[11px] text-white/60">{item.empresa_origem}</td>
+                            <td className="p-4 text-[11px] text-white/60">{item.empresa_destino}</td>
+                            <td className="p-4 text-[11px] text-white/60 text-center">{item.percentual}%</td>
+                            <td className={`p-4 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
+                          </>
+                        ) : isConsolidado ? (
                           <>
                             <td className="p-4 text-[11px] text-white/80 font-medium">{item.nome}</td>
                             <td className={`p-4 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
