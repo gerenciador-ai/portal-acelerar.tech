@@ -203,24 +203,60 @@ function DFCContent() {
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
     setIsModalOpen(true);
     
-    // 1. LÓGICA PARA LINHAS INTERCOMPANY (NOVO)
+    // 1. LÓGICA PARA LINHAS INTERCOMPANY (USANDO CACHE FRONTEND)
     if (grupoKey === "(+) RECUPERAÇÃO INTERCOMPANY" || grupoKey === "(-) RATEIO RECEBIDO INTERCOMPANY") {
       setLoadingDetalhamento(true);
       setDetalhamento([]);
-      try {
-        const mes = mesIdx + 1;
-        const res = await fetch(`/api/financeiro/dfc/detalhamento-intercompany?empresa=${encodeURIComponent(empresaAtiva)}&ano=${anoAtivo}&mes=${mes}&tipo=${grupoKey.includes('RECUPERAÇÃO') ? 'recuperacao' : 'rateio'}`);
-        const data = await res.json();
-        setDetalhamento(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error('Erro ao carregar detalhamento intercompany:', error);
-      } finally {
-        setLoadingDetalhamento(false);
+      
+      const itensIntercompany = [];
+      const nomeAtual = empresaAtiva.trim();
+      const isRecuperacao = grupoKey.includes('RECUPERAÇÃO');
+
+      if (isRecuperacao) {
+        // RECUPERAÇÃO: O que a empresa atual tem a receber das outras
+        // Buscamos no detalheRecuperacao da própria empresa selecionada
+        const dadosEmpresa = cacheDados[nomeAtual];
+        if (dadosEmpresa && dadosEmpresa.detalheRecuperacao && dadosEmpresa.detalheRecuperacao[mesIdx]) {
+          const mesObj = dadosEmpresa.detalheRecuperacao[mesIdx];
+          Object.entries(mesObj).forEach(([empresaDestino, valor]) => {
+            if (valor !== 0) {
+              itensIntercompany.push({
+                categoria: "Recuperação de Despesas",
+                empresa_origem: nomeAtual,
+                empresa_destino: empresaDestino,
+                percentual: "Variável", // A API já envia o valor calculado
+                valor: valor
+              });
+            }
+          });
+        }
+      } else {
+        // RATEIO: O que a empresa atual deve pagar para as outras
+        // Buscamos no detalheRecuperacao de TODAS as outras empresas onde o destino seja a empresa atual
+        Object.keys(cacheDados).forEach(nomeOutra => {
+          if (nomeOutra.trim() === nomeAtual) return;
+          const dadosOutra = cacheDados[nomeOutra];
+          if (dadosOutra.detalheRecuperacao && dadosOutra.detalheRecuperacao[mesIdx]) {
+            const valorParaMim = dadosOutra.detalheRecuperacao[mesIdx][nomeAtual] || 0;
+            if (valorParaMim !== 0) {
+              itensIntercompany.push({
+                categoria: "Rateio de Despesas",
+                empresa_origem: nomeOutra,
+                empresa_destino: nomeAtual,
+                percentual: "Variável",
+                valor: valorParaMim
+              });
+            }
+          }
+        });
       }
+
+      setDetalhamento(itensIntercompany);
+      setLoadingDetalhamento(false);
       return;
     }
 
-    // 2. LÓGICA PARA CONSOLIDADO (EXISTENTE)
+    // 2. LÓGICA PARA CONSOLIDADO
     if (empresaAtiva === 'Consolidado') {
       const detalheConsolidado = empresas.map(emp => {
         const dadosEmpresa = cacheDados[emp.nome];
@@ -230,7 +266,7 @@ function DFCContent() {
       }).filter(item => item.valor !== 0);
       setDetalhamento(detalheConsolidado);
     } else {
-      // 3. LÓGICA PARA LANÇAMENTOS REAIS (EXISTENTE)
+      // 3. LÓGICA PARA LANÇAMENTOS REAIS
       setLoadingDetalhamento(true);
       setDetalhamento([]);
       try {
@@ -461,7 +497,7 @@ function DFCContent() {
                             <td className="p-4 text-[11px] text-white/80 font-medium">{item.categoria}</td>
                             <td className="p-4 text-[11px] text-white/60">{item.empresa_origem}</td>
                             <td className="p-4 text-[11px] text-white/60">{item.empresa_destino}</td>
-                            <td className="p-4 text-[11px] text-white/60 text-center">{item.percentual}%</td>
+                            <td className="p-4 text-[11px] text-white/60 text-center">{item.percentual}</td>
                             <td className={`p-4 text-[11px] text-right font-semibold ${(item.valor || 0) < 0 ? 'text-red-400' : 'text-white'}`}>{formatarMoeda(item.valor || 0)}</td>
                           </>
                         ) : isConsolidado ? (
