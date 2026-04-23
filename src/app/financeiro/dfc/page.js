@@ -203,7 +203,7 @@ function DFCContent() {
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
     setIsModalOpen(true);
     
-    // 1. LÓGICA PARA LINHAS INTERCOMPANY (USANDO CACHE FRONTEND)
+    // 1. LÓGICA PARA LINHAS INTERCOMPANY (DETALHAMENTO REAL)
     if (grupoKey === "(+) RECUPERAÇÃO INTERCOMPANY" || grupoKey === "(-) RATEIO RECEBIDO INTERCOMPANY") {
       setLoadingDetalhamento(true);
       setDetalhamento([]);
@@ -214,39 +214,40 @@ function DFCContent() {
 
       if (isRecuperacao) {
         // RECUPERAÇÃO: O que a empresa atual tem a receber das outras
-        // Buscamos no detalheRecuperacao da própria empresa selecionada
         const dadosEmpresa = cacheDados[nomeAtual];
         if (dadosEmpresa && dadosEmpresa.detalheRecuperacao && dadosEmpresa.detalheRecuperacao[mesIdx]) {
-          const mesObj = dadosEmpresa.detalheRecuperacao[mesIdx];
-          Object.entries(mesObj).forEach(([empresaDestino, valor]) => {
-            if (valor !== 0) {
-              itensIntercompany.push({
-                categoria: "Recuperação de Despesas",
-                empresa_origem: nomeAtual,
-                empresa_destino: empresaDestino,
-                percentual: "Variável", // A API já envia o valor calculado
-                valor: valor
-              });
-            }
+          const lancamentos = dadosEmpresa.detalheRecuperacao[mesIdx];
+          // Agora detalheRecuperacao é uma lista de objetos detalhados vindos da API
+          lancamentos.forEach(item => {
+            itensIntercompany.push({
+              categoria: item.categoria,
+              favorecido: item.favorecido,
+              empresa_origem: item.empresa_origem,
+              empresa_destino: item.empresa_destino,
+              percentual: `${item.percentual}%`,
+              valor: item.valor
+            });
           });
         }
       } else {
         // RATEIO: O que a empresa atual deve pagar para as outras
-        // Buscamos no detalheRecuperacao de TODAS as outras empresas onde o destino seja a empresa atual
         Object.keys(cacheDados).forEach(nomeOutra => {
           if (nomeOutra.trim() === nomeAtual) return;
           const dadosOutra = cacheDados[nomeOutra];
           if (dadosOutra.detalheRecuperacao && dadosOutra.detalheRecuperacao[mesIdx]) {
-            const valorParaMim = dadosOutra.detalheRecuperacao[mesIdx][nomeAtual] || 0;
-            if (valorParaMim !== 0) {
-              itensIntercompany.push({
-                categoria: "Rateio de Despesas",
-                empresa_origem: nomeOutra,
-                empresa_destino: nomeAtual,
-                percentual: "Variável",
-                valor: valorParaMim
-              });
-            }
+            const lancamentosOutra = dadosOutra.detalheRecuperacao[mesIdx];
+            lancamentosOutra.forEach(item => {
+              if (item.empresa_destino.trim() === nomeAtual) {
+                itensIntercompany.push({
+                  categoria: item.categoria,
+                  favorecido: item.favorecido,
+                  empresa_origem: item.empresa_origem,
+                  empresa_destino: item.empresa_destino,
+                  percentual: `${item.percentual}%`,
+                  valor: item.valor
+                });
+              }
+            });
           }
         });
       }
@@ -298,9 +299,14 @@ function DFCContent() {
       if (nomeOutra.trim() === nomeAtual) return;
       const dadosOutra = cacheDados[nomeOutra];
       if (dadosOutra.detalheRecuperacao) {
-        dadosOutra.detalheRecuperacao.forEach((mesObj, idx) => {
-          const valorParaMim = mesObj[nomeAtual] || 0;
-          novoRateioRecebido[idx] += valorParaMim;
+        dadosOutra.detalheRecuperacao.forEach((lancamentosMes, idx) => {
+          if (Array.isArray(lancamentosMes)) {
+            lancamentosMes.forEach(item => {
+              if (item.empresa_destino.trim() === nomeAtual) {
+                novoRateioRecebido[idx] += (item.valor || 0);
+              }
+            });
+          }
         });
       }
     });
@@ -466,6 +472,7 @@ function DFCContent() {
                     {isIntercompany ? (
                       <>
                         <th className="p-4 border-b border-white/10">Categoria</th>
+                        <th className="p-4 border-b border-white/10">Favorecido</th>
                         <th className="p-4 border-b border-white/10">Empresa de Origem</th>
                         <th className="p-4 border-b border-white/10">Empresa de Destino</th>
                         <th className="p-4 border-b border-white/10 text-center">Percentual</th>
@@ -488,13 +495,14 @@ function DFCContent() {
                 </thead>
                 <tbody>
                   {detalhamento.length === 0 ? (
-                    <tr><td colSpan={isIntercompany ? 5 : isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
+                    <tr><td colSpan={isIntercompany ? 6 : isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
                   ) : (
                     detalhamento.map((item, idx) => (
                       <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
                         {isIntercompany ? (
                           <>
                             <td className="p-4 text-[11px] text-white/80 font-medium">{item.categoria}</td>
+                            <td className="p-4 text-[11px] text-white/60">{item.favorecido}</td>
                             <td className="p-4 text-[11px] text-white/60">{item.empresa_origem}</td>
                             <td className="p-4 text-[11px] text-white/60">{item.empresa_destino}</td>
                             <td className="p-4 text-[11px] text-white/60 text-center">{item.percentual}</td>
