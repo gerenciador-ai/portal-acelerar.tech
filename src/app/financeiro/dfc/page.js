@@ -274,6 +274,10 @@ function DFCContent() {
     }
   };
 
+  const exportarExcel = (tipo) => {
+    alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
+  };
+
   const dadosComIntercompanyCruzado = useMemo(() => {
     if (!dados || !dados.matriz || empresaAtiva === 'Consolidado') return dados;
     const d = JSON.parse(JSON.stringify(dados));
@@ -443,6 +447,13 @@ function DFCContent() {
         title={`${isIntercompany ? 'Detalhamento de Regras Intercompany' : isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'} - ${nomeMes} / ${nomeGrupo}`}
       >
         <div className="space-y-6">
+          <div className="flex items-center justify-end gap-3">
+            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+              <button onClick={() => exportarExcel('exibicao')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Exportar Exibição</button>
+              <div className="w-px h-4 bg-white/10 self-center"></div>
+              <button onClick={() => exportarExcel('completo')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Histórico Completo</button>
+            </div>
+          </div>
           {loadingDetalhamento ? (
             <div className="flex flex-col items-center justify-center h-64 space-y-3">
               <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
@@ -530,6 +541,10 @@ function DFCContent() {
         </div>
         {empresaAtiva && (
           <div className="flex items-center gap-4">
+            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+              <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
+              <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
+            </div>
             <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
               <option value={2026}>Ano: 2026</option>
             </select>
