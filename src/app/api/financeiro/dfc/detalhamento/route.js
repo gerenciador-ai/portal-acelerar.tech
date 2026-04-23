@@ -8,7 +8,7 @@ const supabase = createClient(
 
 const NIBO_BASE = "https://api.nibo.com.br/empresas/v1";
 
-// ── Empresas configuradas (Linha 12 do original) ─────────────────────────────
+// ── Empresas configuradas ─────────────────────────────────────────────────────
 const EMPRESAS = [
   { nome: "Victec", apiKeyEnv: "NIBO_API_KEY_VICTEC" },
   { nome: "VMC Tech", apiKeyEnv: "NIBO_API_KEY_VMCTECH" },
@@ -21,12 +21,11 @@ const EMPRESAS = [
   { nome: "Isket", apiKeyEnv: "NIBO_API_KEY_ISKET" },
 ];
 
-// ── Busca paginada mensal (Linha 18 do original) ─────────────────────────────
+// ── Busca paginada mensal (Realizado/Caixa) ───────────────────────────────────
 async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
   const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
   const daysInMonth = new Date(ano, mes, 0).getDate();
   const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
-  // ADICIONADO: stakeholderName e costCenter no expand
   const url = `${NIBO_BASE}/${endpoint}?apitoken=${apiKey}&$filter=date ge ${start} and date le ${end}&$top=500${extra}`;
   const res = await fetch(url);
   if (!res.ok) return [];
@@ -34,6 +33,19 @@ async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
   return data.items || [];
 }
 
+// ── Busca Projetada (Vencimento) ──────────────────────────────────────────────
+async function fetchProjetado(apiKey, tipo, mes, ano, extra = "") {
+  const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(ano, mes, 0).getDate();
+  const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
+  const url = `${NIBO_BASE}/schedules/${tipo}?apitoken=${apiKey}&$filter=dueDate ge ${start} and dueDate le ${end}&$top=500${extra}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items || [];
+}
+
+// ── Busca de Schedules Pagos (para reconciliação no passado) ──────────────────
 async function fetchSchedules(apiKey, tipo, mes, ano) {
   const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
   const daysInMonth = new Date(ano, mes, 0).getDate();
@@ -45,7 +57,7 @@ async function fetchSchedules(apiKey, tipo, mes, ano) {
   return data.items || [];
 }
 
-// ── Mapa de schedules (Linha 42 do original) ─────────────────────────────────
+// ── Mapa de schedules ─────────────────────────────────────────────────────────
 function buildScheduleMap(schedules) {
   const map = {};
   for (const s of schedules) {
@@ -71,7 +83,7 @@ function buildScheduleMap(schedules) {
   return map;
 }
 
-// ── Mapeamento de categoria (Linha 68 do original) ───────────────────────────
+// ── Mapeamento de categoria ───────────────────────────────────────────────────
 function mapearCategoria(nome, planoContas) {
   nome = (nome || "").trim();
   if (!nome) return "OUTROS / NÃO CLASSIFICADOS";
@@ -90,7 +102,7 @@ function mapearCategoria(nome, planoContas) {
   return "OUTROS / NÃO CLASSIFICADOS";
 }
 
-// ── Função auxiliar para formatar data (NOVO) ──────────────────────────────────
+// ── Função auxiliar para formatar data ────────────────────────────────────────
 function formatarDataNibo(dataString) {
   if (!dataString) return null;
   const match = dataString.match(/^\d{4}-\d{2}-\d{2}/);
@@ -99,108 +111,197 @@ function formatarDataNibo(dataString) {
 
 // ── Handler de Detalhamento ───────────────────────────────────────────────────
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const empresaNome = searchParams.get("empresa");
-  const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
-  const mesSolicitado = parseInt(searchParams.get("mes"));
-  const grupoSolicitado = searchParams.get("grupo");
+  try {
+    const { searchParams } = new URL(request.url);
+    const empresaNome = searchParams.get("empresa");
+    const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
+    const mesSolicitado = parseInt(searchParams.get("mes"));
+    const grupoSolicitado = searchParams.get("grupo");
 
-  if (!empresaNome || !mesSolicitado || !grupoSolicitado) {
-    return NextResponse.json({ error: "Parâmetros ausentes" }, { status: 400 });
-  }
+    if (!empresaNome || !mesSolicitado || !grupoSolicitado) {
+      return NextResponse.json({ error: "Parâmetros ausentes" }, { status: 400 });
+    }
 
-  const empresa = EMPRESAS.find(
-    (e) => e.nome.toLowerCase() === (empresaNome || "").toLowerCase()
-  );
-  if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+    const empresa = EMPRESAS.find(
+      (e) => e.nome.toLowerCase() === (empresaNome || "").toLowerCase()
+    );
+    if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
 
-  const apiKey = process.env[empresa.apiKeyEnv];
-  if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
+    const apiKey = process.env[empresa.apiKeyEnv];
+    if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
-  const { data: planoContas, error: planoError } = await supabase
-    .from("plano_contas_dfc")
-    .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
+    const { data: planoContas, error: planoError } = await supabase
+      .from("plano_contas_dfc")
+      .select("codigo_9_digitos, categoria_nibo, grupo_dfc");
 
-  if (planoError) return NextResponse.json({ error: "Erro Supabase" }, { status: 500 });
+    if (planoError) return NextResponse.json({ error: "Erro Supabase" }, { status: 500 });
 
-  // ADICIONADO: Expand de stakeholder e costCenter para pegar o Nome real
-  const [receipts, payments, creditSch, debitSch] = await Promise.all([
-    fetchMonth(apiKey, "receipts", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
-    fetchMonth(apiKey, "payments", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
-    fetchSchedules(apiKey, "credit", mesSolicitado, ano),
-    fetchSchedules(apiKey, "debit", mesSolicitado, ano),
-  ]);
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth() + 1;
+    const anoAtual = hoje.getFullYear();
+    const isPassado = (ano < anoAtual) || (ano === anoAtual && mesSolicitado < mesAtual);
 
-  const creditMap = buildScheduleMap(creditSch);
-  const debitMap = buildScheduleMap(debitSch);
-  
-  const detalhamento = [];
+    let receipts = [];
+    let payments = [];
+    let creditMap = {};
+    let debitMap = {};
 
-  // Receipts
-  for (const item of receipts) {
-    if (item.isTransfer) continue;
-    const catNome = item.category?.name || "";
-    const sid = item.scheduleId;
-    const sch = sid ? creditMap[sid] : null;
+    if (isPassado) {
+      // Lógica de Caixa (Passado)
+      const [r, p, cs, ds] = await Promise.all([
+        fetchMonth(apiKey, "receipts", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
+        fetchMonth(apiKey, "payments", mesSolicitado, ano, "&$expand=category,stakeholder,costCenter"),
+        fetchSchedules(apiKey, "credit", mesSolicitado, ano),
+        fetchSchedules(apiKey, "debit", mesSolicitado, ano),
+      ]);
+      receipts = r;
+      payments = p;
+      creditMap = buildScheduleMap(cs);
+      debitMap = buildScheduleMap(ds);
+    } else {
+      // Lógica de Vencimento (Presente/Futuro)
+      const [cs, ds] = await Promise.all([
+        fetchProjetado(apiKey, "credit", mesSolicitado, ano, "&$expand=category,categories,stakeholder,costCenter"),
+        fetchProjetado(apiKey, "debit", mesSolicitado, ano, "&$expand=category,categories,stakeholder,costCenter"),
+      ]);
+      receipts = cs.map(s => ({ ...s, isProjetado: true }));
+      payments = ds.map(s => ({ ...s, isProjetado: true }));
+    }
 
-    if (sch) {
-      for (const entry of sch) {
-        if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
-          const sinal = entry.tipo === "out" ? -1 : 1;
-          detalhamento.push({
-            data: formatarDataNibo(item.date),
-            nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
-            descricao: item.description || "—",
-            categoria: entry.nome,
-            valor: entry.valor * sinal
-          });
+    const detalhamento = [];
+
+    // Processar Receipts (Entradas)
+    for (const item of receipts) {
+      if (item.isTransfer) continue;
+      
+      if (item.isProjetado) {
+        // No projetado, as categorias já vêm expandidas ou em sub-categorias
+        const cats = item.categories || [];
+        if (cats.length > 0) {
+          for (const c of cats) {
+            const catNome = (c.categoryName || "").trim();
+            if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+              detalhamento.push({
+                data: formatarDataNibo(item.dueDate),
+                nome: item.stakeholder?.name || item.stakeholderName || "Lançamento Projetado",
+                descricao: item.description || "—",
+                categoria: catNome,
+                valor: parseFloat(c.value || 0) * (c.type === "out" ? -1 : 1)
+              });
+            }
+          }
+        } else {
+          const catNome = item.category?.name || "";
+          if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+            detalhamento.push({
+              data: formatarDataNibo(item.dueDate),
+              nome: item.stakeholder?.name || item.stakeholderName || "Lançamento Projetado",
+              descricao: item.description || "—",
+              categoria: catNome,
+              valor: parseFloat(item.value || 0)
+            });
+          }
+        }
+      } else {
+        // Lógica de Caixa original
+        const catNome = item.category?.name || "";
+        const sid = item.scheduleId;
+        const sch = sid ? creditMap[sid] : null;
+
+        if (sch) {
+          for (const entry of sch) {
+            if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
+              const sinal = entry.tipo === "out" ? -1 : 1;
+              detalhamento.push({
+                data: formatarDataNibo(item.date),
+                nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
+                descricao: item.description || "—",
+                categoria: entry.nome,
+                valor: entry.valor * sinal
+              });
+            }
+          }
+        } else {
+          if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+            detalhamento.push({
+              data: formatarDataNibo(item.date),
+              nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
+              descricao: item.description || "—",
+              categoria: catNome,
+              valor: parseFloat(item.value || 0)
+            });
+          }
         }
       }
-    } else {
-      if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
-        detalhamento.push({
-          data: formatarDataNibo(item.date),
-          nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
-          descricao: item.description || "—",
-          categoria: catNome,
-          valor: parseFloat(item.value || 0)
-        });
-      }
     }
-  }
 
-  // Payments
-  for (const item of payments) {
-    if (item.isTransfer) continue;
-    const catNome = item.category?.name || "";
-    const sid = item.scheduleId;
-    const sch = sid ? debitMap[sid] : null;
+    // Processar Payments (Saídas)
+    for (const item of payments) {
+      if (item.isTransfer) continue;
 
-    if (sch) {
-      for (const entry of sch) {
-        if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
-          detalhamento.push({
-            data: formatarDataNibo(item.date),
-            nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
-            descricao: item.description || "—",
-            categoria: entry.nome,
-            valor: entry.valor * -1
-          });
+      if (item.isProjetado) {
+        const cats = item.categories || [];
+        if (cats.length > 0) {
+          for (const c of cats) {
+            const catNome = (c.categoryName || "").trim();
+            if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+              detalhamento.push({
+                data: formatarDataNibo(item.dueDate),
+                nome: item.stakeholder?.name || item.stakeholderName || "Lançamento Projetado",
+                descricao: item.description || "—",
+                categoria: catNome,
+                valor: parseFloat(c.value || 0) * -1
+              });
+            }
+          }
+        } else {
+          const catNome = item.category?.name || "";
+          if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+            detalhamento.push({
+              data: formatarDataNibo(item.dueDate),
+              nome: item.stakeholder?.name || item.stakeholderName || "Lançamento Projetado",
+              descricao: item.description || "—",
+              categoria: catNome,
+              valor: parseFloat(item.value || 0) * -1
+            });
+          }
+        }
+      } else {
+        // Lógica de Caixa original
+        const catNome = item.category?.name || "";
+        const sid = item.scheduleId;
+        const sch = sid ? debitMap[sid] : null;
+
+        if (sch) {
+          for (const entry of sch) {
+            if (mapearCategoria(entry.nome, planoContas) === grupoSolicitado) {
+              detalhamento.push({
+                data: formatarDataNibo(item.date),
+                nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
+                descricao: item.description || "—",
+                categoria: entry.nome,
+                valor: entry.valor * -1
+              });
+            }
+          }
+        } else {
+          if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
+            detalhamento.push({
+              data: formatarDataNibo(item.date),
+              nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
+              descricao: item.description || "—",
+              categoria: catNome,
+              valor: parseFloat(item.value || 0) * -1
+            });
+          }
         }
       }
-    } else {
-      if (mapearCategoria(catNome, planoContas) === grupoSolicitado) {
-        detalhamento.push({
-          data: formatarDataNibo(item.date),
-          nome: item.stakeholder?.name || item.stakeholderName || "Lançamento NIBO",
-          descricao: item.description || "—",
-          categoria: catNome,
-          valor: parseFloat(item.value || 0) * -1
-        });
-      }
     }
-  }
 
-  detalhamento.sort((a, b) => new Date(a.data) - new Date(b.data));
-  return NextResponse.json(detalhamento);
+    detalhamento.sort((a, b) => new Date(a.data) - new Date(b.data));
+    return NextResponse.json(detalhamento);
+  } catch (error) {
+    console.error("Erro no detalhamento DFC:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
