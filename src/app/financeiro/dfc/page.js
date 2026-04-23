@@ -60,10 +60,8 @@ function DFCContent() {
   const [visao, setVisao] = useState('Mensal');
   const [anoAtivo, setAnoAtivo] = useState(2026);
 
-  // CACHE DE DADOS POR EMPRESA PARA CONSOLIDAÇÃO E RATEIO
   const [cacheDados, setCacheDados] = useState({});
 
-  // ESTADOS DO DETALHAMENTO
   const [selecionado, setSelecionado] = useState({ mesIdx: null, grupoKey: null, grupoLabel: null });
   const [detalhamento, setDetalhamento] = useState([]);
   const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
@@ -97,10 +95,10 @@ function DFCContent() {
     try {
       const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(nomeEmpresa)}&ano=${anoAtivo}`);
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       setDados(data);
       setCacheDados(prev => ({ ...prev, [nomeEmpresa]: data }));
 
-      // DISPARA CARGA DAS OUTRAS EM BACKGROUND PARA INTERCOMPANY
       const empresasParaCarregar = empresas.filter(e => e.nome !== nomeEmpresa && !cacheDados[e.nome]);
       if (empresasParaCarregar.length > 0) {
         Promise.all(empresasParaCarregar.map(async (emp) => {
@@ -115,6 +113,7 @@ function DFCContent() {
       }
     } catch (error) {
       console.error('Erro ao carregar DFC:', error);
+      alert('Erro ao carregar dados: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -127,7 +126,8 @@ function DFCContent() {
       const promessas = empresas.map(async (emp) => {
         if (!cacheDados[emp.nome]) {
           const res = await fetch(`/api/financeiro/dfc?empresa=${encodeURIComponent(emp.nome)}&ano=${anoAtivo}`);
-          return { nome: emp.nome, data: await res.json() };
+          const d = await res.json();
+          return { nome: emp.nome, data: d };
         }
         return { nome: emp.nome, data: cacheDados[emp.nome] };
       });
@@ -147,13 +147,14 @@ function DFCContent() {
   };
 
   const gerarDadosConsolidados = (cache) => {
-    const primeiraEmpresa = Object.values(cache)[0];
-    if (!primeiraEmpresa || !primeiraEmpresa.matriz) return null;
+    const primeiraEmpresa = Object.values(cache).find(d => d && d.matriz);
+    if (!primeiraEmpresa) return null;
 
     const matrizConsolidada = primeiraEmpresa.matriz.map(linhaOriginal => {
       const novaLinha = { ...linhaOriginal, valores: new Array(12).fill(0) };
       Object.values(cache).forEach(empresaData => {
-        const linhaEmpresa = empresaData.matriz?.find(l => l.key === linhaOriginal.key);
+        if (!empresaData || !empresaData.matriz) return;
+        const linhaEmpresa = empresaData.matriz.find(l => l.key === linhaOriginal.key);
         if (linhaEmpresa) {
           linhaEmpresa.valores.forEach((v, i) => {
             novaLinha.valores[i] += (v || 0);
@@ -163,16 +164,15 @@ function DFCContent() {
       return novaLinha;
     });
 
-    const saldoInicialConsolidado = Object.values(cache).reduce((acc, emp) => acc + (emp.saldoInicial || 0), 0);
+    const saldoInicialConsolidado = Object.values(cache).reduce((acc, emp) => acc + (emp?.saldoInicial || 0), 0);
     const recuperacaoIntercompanyConsolidada = new Array(12).fill(0);
+    const rateioRecebidoIntercompanyConsolidada = new Array(12).fill(0);
+
     Object.values(cache).forEach(empresaData => {
+      if (!empresaData) return;
       empresaData.recuperacaoIntercompany?.forEach((v, i) => {
         recuperacaoIntercompanyConsolidada[i] += (v || 0);
       });
-    });
-
-    const rateioRecebidoIntercompanyConsolidada = new Array(12).fill(0);
-    Object.values(cache).forEach(empresaData => {
       empresaData.rateioRecebidoIntercompany?.forEach((v, i) => {
         rateioRecebidoIntercompanyConsolidada[i] += (v || 0);
       });
@@ -185,7 +185,7 @@ function DFCContent() {
       matriz: matrizConsolidada,
       recuperacaoIntercompany: recuperacaoIntercompanyConsolidada,
       rateioRecebidoIntercompany: rateioRecebidoIntercompanyConsolidada,
-      statusMeses: primeiraEmpresa.statusMeses // Assume o status da primeira empresa
+      statusMeses: primeiraEmpresa.statusMeses
     };
   };
 
@@ -204,20 +204,17 @@ function DFCContent() {
     setSelecionado({ mesIdx, grupoKey, grupoLabel });
     setIsModalOpen(true);
     
-    // 1. LÓGICA PARA LINHAS INTERCOMPANY (DETALHAMENTO REAL)
     if (grupoKey === "(+) RECUPERAÇÃO INTERCOMPANY" || grupoKey === "(-) RATEIO RECEBIDO INTERCOMPANY") {
       setLoadingDetalhamento(true);
       setDetalhamento([]);
-      
       const itensIntercompany = [];
       const nomeAtual = empresaAtiva.trim();
       const isRecuperacao = grupoKey.includes('RECUPERAÇÃO');
 
       if (isRecuperacao) {
         const dadosEmpresa = cacheDados[nomeAtual];
-        if (dadosEmpresa && dadosEmpresa.detalheRecuperacao && dadosEmpresa.detalheRecuperacao[mesIdx]) {
-          const lancamentos = dadosEmpresa.detalheRecuperacao[mesIdx];
-          lancamentos.forEach(item => {
+        if (dadosEmpresa?.detalheRecuperacao?.[mesIdx]) {
+          dadosEmpresa.detalheRecuperacao[mesIdx].forEach(item => {
             itensIntercompany.push({
               categoria: item.categoria,
               favorecido: item.favorecido,
@@ -232,9 +229,8 @@ function DFCContent() {
         Object.keys(cacheDados).forEach(nomeOutra => {
           if (nomeOutra.trim() === nomeAtual) return;
           const dadosOutra = cacheDados[nomeOutra];
-          if (dadosOutra.detalheRecuperacao && dadosOutra.detalheRecuperacao[mesIdx]) {
-            const lancamentosOutra = dadosOutra.detalheRecuperacao[mesIdx];
-            lancamentosOutra.forEach(item => {
+          if (dadosOutra?.detalheRecuperacao?.[mesIdx]) {
+            dadosOutra.detalheRecuperacao[mesIdx].forEach(item => {
               if (item.empresa_destino.trim() === nomeAtual) {
                 itensIntercompany.push({
                   categoria: item.categoria,
@@ -249,13 +245,11 @@ function DFCContent() {
           }
         });
       }
-
       setDetalhamento(itensIntercompany);
       setLoadingDetalhamento(false);
       return;
     }
 
-    // 2. LÓGICA PARA CONSOLIDADO
     if (empresaAtiva === 'Consolidado') {
       const detalheConsolidado = empresas.map(emp => {
         const dadosEmpresa = cacheDados[emp.nome];
@@ -265,7 +259,6 @@ function DFCContent() {
       }).filter(item => item.valor !== 0);
       setDetalhamento(detalheConsolidado);
     } else {
-      // 3. LÓGICA PARA LANÇAMENTOS REAIS
       setLoadingDetalhamento(true);
       setDetalhamento([]);
       try {
@@ -281,21 +274,16 @@ function DFCContent() {
     }
   };
 
-  const exportarExcel = (tipo) => {
-    alert(`Exportando ${tipo === 'exibicao' ? 'lançamentos em exibição' : 'histórico completo'} para Excel...`);
-  };
-
   const dadosComIntercompanyCruzado = useMemo(() => {
     if (!dados || !dados.matriz || empresaAtiva === 'Consolidado') return dados;
     const d = JSON.parse(JSON.stringify(dados));
     const nomeAtual = empresaAtiva.trim();
-    
     const novoRateioRecebido = new Array(12).fill(0);
 
     Object.keys(cacheDados).forEach(nomeOutra => {
       if (nomeOutra.trim() === nomeAtual) return;
       const dadosOutra = cacheDados[nomeOutra];
-      if (dadosOutra.detalheRecuperacao) {
+      if (dadosOutra?.detalheRecuperacao) {
         dadosOutra.detalheRecuperacao.forEach((lancamentosMes, idx) => {
           if (Array.isArray(lancamentosMes)) {
             lancamentosMes.forEach(item => {
@@ -307,7 +295,6 @@ function DFCContent() {
         });
       }
     });
-
     d.rateioRecebidoIntercompany = novoRateioRecebido;
     return d;
   }, [dados, cacheDados, empresaAtiva]);
@@ -351,16 +338,12 @@ function DFCContent() {
     for (let m = 0; m < 12; m++) {
       const get = (k) => matrizGerencial.find(r => r.key === k)?.valores[m] || 0;
       const set = (k, v) => { const row = matrizGerencial.find(r => r.key === k); if (row) row.valores[m] = v; };
-      
       const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
       set("(=) RECEITA LÍQUIDA", recLiq);
-      
       const fcoReal = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
       set("(=) FLUXO OPERACIONAL (FCO)", fcoReal);
-      
       const fcoGerencial = fcoReal + get("(+) RECUPERAÇÃO INTERCOMPANY") + get("(-) RATEIO RECEBIDO INTERCOMPANY");
       set("(=) FLUXO OPERACIONAL GERENCIAL (FCO)", fcoGerencial);
-      
       const saldoGerencial = fcoGerencial + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
       set("(=) SALDO LÍQUIDO DO PERÍODO", saldoGerencial);
     }
@@ -368,7 +351,7 @@ function DFCContent() {
   }, [dadosComIntercompanyCruzado]);
 
   const renderTabelaMensal = (matrizParaRenderizar, titulo, saldoInicialBase) => {
-    if (!matrizParaRenderizar) return null;
+    if (!matrizParaRenderizar || !dados) return null;
     const meses = dados.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
     const statusMeses = dados.statusMeses || new Array(12).fill('REALIZADO');
     
@@ -460,13 +443,6 @@ function DFCContent() {
         title={`${isIntercompany ? 'Detalhamento de Regras Intercompany' : isConsolidado ? 'Composição por Empresa' : 'Detalhamento dos Lançamentos'} - ${nomeMes} / ${nomeGrupo}`}
       >
         <div className="space-y-6">
-          <div className="flex items-center justify-end gap-3">
-            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button onClick={() => exportarExcel('exibicao')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Exportar Exibição</button>
-              <div className="w-px h-4 bg-white/10 self-center"></div>
-              <button onClick={() => exportarExcel('completo')} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors">Histórico Completo</button>
-            </div>
-          </div>
           {loadingDetalhamento ? (
             <div className="flex flex-col items-center justify-center h-64 space-y-3">
               <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
@@ -554,10 +530,6 @@ function DFCContent() {
         </div>
         {empresaAtiva && (
           <div className="flex items-center gap-4">
-            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
-              <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
-            </div>
             <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
               <option value={2026}>Ano: 2026</option>
             </select>
