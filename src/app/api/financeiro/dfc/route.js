@@ -20,11 +20,24 @@ const EMPRESAS = [
   { nome: "Isket", apiKeyEnv: "NIBO_API_KEY_ISKET" }
 ];
 
-async function fetchMonth(apiKey, endpoint, mes, ano, extra = "") {
+// Função para buscar dados realizados (Caixa)
+async function fetchRealizado(apiKey, endpoint, mes, ano, extra = "") {
   const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
   const daysInMonth = new Date(ano, mes, 0).getDate();
   const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
   const url = `${NIBO_BASE}/${endpoint}?apitoken=${apiKey}&$filter=date ge ${start} and date le ${end}&$top=500${extra}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items || [];
+}
+
+// Função para buscar dados projetados (Vencimento)
+async function fetchProjetado(apiKey, tipo, mes, ano) {
+  const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(ano, mes, 0).getDate();
+  const end = `${ano}-${String(mes).padStart(2, "0")}-${daysInMonth}`;
+  const url = `${NIBO_BASE}/schedules/${tipo}?apitoken=${apiKey}&$filter=dueDate ge ${start} and dueDate le ${end}&$top=500&$expand=category,categories,stakeholder`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
@@ -82,21 +95,49 @@ function mapearCategoria(nome, planoContas) {
 }
 
 async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresaNome) {
-  const [receipts, payments, creditSch, debitSch] = await Promise.all([
-    fetchMonth(apiKey, "receipts", mes, ano, "&$expand=category,stakeholder"),
-    fetchMonth(apiKey, "payments", mes, ano, "&$expand=category,stakeholder"),
-    fetchSchedules(apiKey, "credit", mes, ano),
-    fetchSchedules(apiKey, "debit", mes, ano),
-  ]);
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+  
+  // Lógica Híbrida: 
+  // Se o mês/ano for anterior ao atual -> Realizado (Caixa)
+  // Se o mês/ano for atual ou futuro -> Projetado (Vencimento)
+  const isPassado = (ano < anoAtual) || (ano === anoAtual && mes < mesAtual);
 
-  const creditMap = buildScheduleMap(creditSch);
-  const debitMap = buildScheduleMap(debitSch);
+  let receipts = [];
+  let payments = [];
+  let creditMap = {};
+  let debitMap = {};
+
+  try {
+    if (isPassado) {
+      const [r, p, cs, ds] = await Promise.all([
+        fetchRealizado(apiKey, "receipts", mes, ano, "&$expand=category,stakeholder"),
+        fetchRealizado(apiKey, "payments", mes, ano, "&$expand=category,stakeholder"),
+        fetchSchedules(apiKey, "credit", mes, ano),
+        fetchSchedules(apiKey, "debit", mes, ano),
+      ]);
+      receipts = r;
+      payments = p;
+      creditMap = buildScheduleMap(cs);
+      debitMap = buildScheduleMap(ds);
+    } else {
+      const [cs, ds] = await Promise.all([
+        fetchProjetado(apiKey, "credit", mes, ano),
+        fetchProjetado(apiKey, "debit", mes, ano),
+      ]);
+      receipts = cs.map(s => ({ ...s, isProjetado: true }));
+      payments = ds.map(s => ({ ...s, isProjetado: true }));
+    }
+  } catch (e) {
+    console.error(`Erro ao buscar dados para o mês ${mes}/${ano}:`, e);
+  }
 
   const acumulado = {};
   const intercompany = { 
     recuperacao: 0, 
     rateioRecebido: 0,
-    detalheRecuperacao: [] // NOVO: Agora é uma lista de objetos detalhados
+    detalheRecuperacao: []
   };
   
   const acumular = (grupo, valor) => {
@@ -110,7 +151,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     const grupo = mapearCategoria(catNome, planoContas);
     const dataRef = new Date(ano, mes - 1, 1);
     
-    // 1. RECUPERAÇÃO: O que eu paguei e outros me devem
     const regrasOrigem = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
@@ -124,8 +164,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
     regrasOrigem.forEach(r => {
       const valorRateado = Math.abs(valorOriginal) * (parseFloat(r.percentual || 0) / 100);
       intercompany.recuperacao += valorRateado;
-      
-      // Guarda o detalhamento completo para o frontend
       intercompany.detalheRecuperacao.push({
         categoria: catNome,
         favorecido: favorecido,
@@ -136,7 +174,6 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
       });
     });
 
-    // 2. RATEIO RECEBIDO: O que outros pagaram e eu devo
     const regrasDestino = regrasRateio.filter(r => {
       const dInicio = new Date(r.data_inicio);
       const dFim = r.data_fim ? new Date(r.data_fim) : null;
@@ -157,31 +194,39 @@ async function processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa
 
   for (const item of receipts) {
     if (item.isTransfer) continue;
-    const sid = item.scheduleId;
-    const sch = sid ? creditMap[sid] : null;
-    if (sch) {
-      for (const entry of sch) {
-        processarItem({ ...item, category: { name: entry.nome } }, entry.valor * (entry.tipo === "out" ? -1 : 1), true);
-      }
-    } else {
+    if (item.isProjetado) {
       processarItem(item, parseFloat(item.value || 0), true);
+    } else {
+      const sid = item.scheduleId;
+      const sch = sid ? creditMap[sid] : null;
+      if (sch) {
+        for (const entry of sch) {
+          processarItem({ ...item, category: { name: entry.nome } }, entry.valor * (entry.tipo === "out" ? -1 : 1), true);
+        }
+      } else {
+        processarItem(item, parseFloat(item.value || 0), true);
+      }
     }
   }
 
   for (const item of payments) {
     if (item.isTransfer) continue;
-    const sid = item.scheduleId;
-    const sch = sid ? debitMap[sid] : null;
-    if (sch) {
-      for (const entry of sch) {
-        processarItem({ ...item, category: { name: entry.nome } }, entry.valor * -1, false);
-      }
-    } else {
+    if (item.isProjetado) {
       processarItem(item, parseFloat(item.value || 0) * -1, false);
+    } else {
+      const sid = item.scheduleId;
+      const sch = sid ? debitMap[sid] : null;
+      if (sch) {
+        for (const entry of sch) {
+          processarItem({ ...item, category: { name: entry.nome } }, entry.valor * -1, false);
+        }
+      } else {
+        processarItem(item, parseFloat(item.value || 0) * -1, false);
+      }
     }
   }
   
-  return { acumulado, intercompany };
+  return { acumulado, intercompany, isPassado };
 }
 
 const LINHAS_DFC = [
@@ -207,60 +252,70 @@ async function buscarSaldoInicial(empresaNome) {
 }
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const empresaNome = searchParams.get("empresa");
-  const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
-  const empresa = EMPRESAS.find(e => e.nome.toLowerCase() === (empresaNome || "").toLowerCase());
-  if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
-  const apiKey = process.env[empresa.apiKeyEnv];
-  if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
+  try {
+    const { searchParams } = new URL(request.url);
+    const empresaNome = searchParams.get("empresa");
+    const ano = parseInt(searchParams.get("ano") || new Date().getFullYear());
+    const empresa = EMPRESAS.find(e => e.nome.toLowerCase() === (empresaNome || "").toLowerCase());
+    if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+    const apiKey = process.env[empresa.apiKeyEnv];
+    if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
-  const [planoRes, regrasRes] = await Promise.all([
-    supabase.from("plano_contas_dfc").select("codigo_9_digitos, categoria_nibo, grupo_dfc"),
-    supabase.from("regras_rateio_dfc").select("*")
-  ]);
+    const [planoRes, regrasRes] = await Promise.all([
+      supabase.from("plano_contas_dfc").select("codigo_9_digitos, categoria_nibo, grupo_dfc"),
+      supabase.from("regras_rateio_dfc").select("*")
+    ]);
 
-  const planoContas = planoRes.data || [];
-  const regrasRateio = regrasRes.data || [];
-  const mesesData = [];
-  for (let batch = 0; batch < 4; batch++) {
-    const mesesBatch = [batch * 3 + 1, batch * 3 + 2, batch * 3 + 3];
-    const results = await Promise.all(mesesBatch.map(mes => processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa.nome)));
-    mesesData.push(...results);
+    const planoContas = planoRes.data || [];
+    const regrasRateio = regrasRes.data || [];
+    const mesesData = [];
+    for (let batch = 0; batch < 4; batch++) {
+      const mesesBatch = [batch * 3 + 1, batch * 3 + 2, batch * 3 + 3];
+      const results = await Promise.all(mesesBatch.map(mes => processarMes(apiKey, mes, ano, planoContas, regrasRateio, empresa.nome)));
+      mesesData.push(...results);
+    }
+
+    const matriz = LINHAS_DFC.map(linha => ({
+      key: linha.key,
+      label: linha.label,
+      tipo: linha.tipo,
+      valores: mesesData.map(m => linha.tipo === "calculado" ? null : (m.acumulado[linha.key] || 0))
+    }));
+
+    const recuperacaoIntercompany = mesesData.map(m => m.intercompany.recuperacao);
+    const rateioRecebidoIntercompany = mesesData.map(m => m.intercompany.rateioRecebido);
+    const detalheRecuperacao = mesesData.map(m => m.intercompany.detalheRecuperacao);
+    const statusMeses = mesesData.map(m => m.isPassado ? "REALIZADO" : "PROJETADO");
+
+    for (let m = 0; m < 12; m++) {
+      const get = (k) => matriz.find(r => r.key === k)?.valores[m] || 0;
+      const set = (k, v) => { 
+        const row = matriz.find(r => r.key === k);
+        if (row) row.valores[m] = v;
+      };
+      const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
+      set("(=) RECEITA LÍQUIDA", recLiq);
+      const fco = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
+      set("(=) FLUXO OPERACIONAL (FCO)", fco);
+      const saldo = fco + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(+/-) FLUXO DE FINANCIAMENTO (FCF)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
+      set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
+    }
+
+    const saldoInicial = await buscarSaldoInicial(empresa.nome);
+
+    return NextResponse.json({
+      empresa: empresa.nome,
+      ano,
+      meses: ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"],
+      matriz,
+      saldoInicial,
+      recuperacaoIntercompany,
+      rateioRecebidoIntercompany,
+      detalheRecuperacao,
+      statusMeses
+    });
+  } catch (error) {
+    console.error("Erro fatal na API DFC:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  const matriz = LINHAS_DFC.map(linha => ({
-    key: linha.key,
-    label: linha.label,
-    tipo: linha.tipo,
-    valores: mesesData.map(m => linha.tipo === "calculado" ? null : (m.acumulado[linha.key] || 0))
-  }));
-
-  const recuperacaoIntercompany = mesesData.map(m => m.intercompany.recuperacao);
-  const rateioRecebidoIntercompany = mesesData.map(m => m.intercompany.rateioRecebido);
-  const detalheRecuperacao = mesesData.map(m => m.intercompany.detalheRecuperacao);
-
-  for (let m = 0; m < 12; m++) {
-    const get = (k) => matriz.find(r => r.key === k).valores[m] || 0;
-    const set = (k, v) => { matriz.find(r => r.key === k).valores[m] = v; };
-    const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
-    set("(=) RECEITA LÍQUIDA", recLiq);
-    const fco = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
-    set("(=) FLUXO OPERACIONAL (FCO)", fco);
-    const saldo = fco + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(+/-) FLUXO DE FINANCIAMENTO (FCF)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
-    set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
-  }
-
-  const saldoInicial = await buscarSaldoInicial(empresa.nome);
-
-  return NextResponse.json({
-    empresa: empresa.nome,
-    ano,
-    meses: ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"],
-    matriz,
-    saldoInicial,
-    recuperacaoIntercompany,
-    rateioRecebidoIntercompany,
-    detalheRecuperacao
-  });
 }
