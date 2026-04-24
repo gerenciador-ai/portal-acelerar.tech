@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const EMPRESAS = [
-  { id: 'victec', nome: 'Victec', logo: '/logos/victec.png' },
+  { id: 'victec', nome: 'Victec', logo: "/logo_victec.png" },
   { id: 'vmctech', nome: 'VMC Tech', logo: '/logos/vmctech.png' },
   { id: 'grt', nome: 'GRT', logo: '/logos/grt.png' },
   { id: 'bllog', nome: 'Bllog', logo: '/logos/bllog.png' },
