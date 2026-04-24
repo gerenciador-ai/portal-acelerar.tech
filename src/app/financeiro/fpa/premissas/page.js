@@ -43,7 +43,6 @@ export default function PremissasPage() {
 
   const [headcounts, setHeadcounts] = useState([]);
 
-  // Adicionar nova linha de headcount
   const addHeadcount = () => {
     setHeadcounts([...headcounts, {
       id: Date.now(),
@@ -68,8 +67,6 @@ export default function PremissasPage() {
     setLoading(true);
     
     try {
-      // Aqui chamaremos a API para salvar as premissas no Supabase
-      // Por enquanto, simulamos o sucesso
       console.log("Salvando premissas:", { empresaAtiva, anoAtivo, reajustes, dissidios, headcounts });
       alert("Premissas salvas com sucesso para " + empresaAtiva.nome);
     } catch (error) {
@@ -79,6 +76,10 @@ export default function PremissasPage() {
     }
   };
 
+  // Estilo comum para os selects para evitar o problema de fundo branco/letra branca
+  const selectStyle = "bg-acelerar-dark-blue border border-white/10 rounded-lg p-2 text-sm text-white outline-none focus:border-acelerar-light-blue appearance-none cursor-pointer";
+  const optionStyle = "bg-acelerar-dark-blue text-white";
+
   return (
     <div className="flex flex-col gap-6">
       {/* Seleção de Empresa */}
@@ -87,10 +88,20 @@ export default function PremissasPage() {
           <button
             key={emp.id}
             onClick={() => setEmpresaAtiva(emp)}
-            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-3 ${
               empresaAtiva?.id === emp.id ? 'bg-acelerar-light-blue text-white shadow-lg scale-105' : 'bg-white/5 text-white/60 hover:bg-white/10'
             }`}
           >
+            {/* Imagem com Fallback */}
+            <div className="w-6 h-6 relative flex items-center justify-center bg-white/10 rounded overflow-hidden">
+              <img 
+                src={emp.logo} 
+                alt={emp.nome} 
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+              <span className="text-[10px] font-bold uppercase">{emp.nome.substring(0,1)}</span>
+            </div>
             <span className="text-sm font-medium">{emp.nome}</span>
           </button>
         ))}
@@ -98,9 +109,9 @@ export default function PremissasPage() {
           <select 
             value={anoAtivo} 
             onChange={(e) => setAnoAtivo(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-acelerar-light-blue"
+            className={selectStyle}
           >
-            {[2024, 2025, 2026].map(ano => <option key={ano} value={ano}>{ano}</option>)}
+            {[2024, 2025, 2026].map(ano => <option key={ano} value={ano} className={optionStyle}>{ano}</option>)}
           </select>
           <button 
             onClick={handleSalvar}
@@ -127,7 +138,7 @@ export default function PremissasPage() {
                 <label className="text-xs text-white/50 uppercase font-bold">Inflação Anual (%)</label>
                 <input 
                   type="number" 
-                  className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none focus:border-acelerar-light-blue"
+                  className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white outline-none focus:border-acelerar-light-blue"
                   value={reajustes.inflacao.percentual}
                   onChange={(e) => setReajustes({...reajustes, inflacao: {...reajustes.inflacao, percentual: e.target.value}})}
                 />
@@ -135,18 +146,18 @@ export default function PremissasPage() {
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-white/50 uppercase font-bold">Mês de Início</label>
                 <select 
-                  className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
+                  className={selectStyle}
                   value={reajustes.inflacao.mes}
                   onChange={(e) => setReajustes({...reajustes, inflacao: {...reajustes.inflacao, mes: e.target.value}})}
                 >
-                  {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
+                  {MESES.map((m, i) => <option key={m} value={i+1} className={optionStyle}>{m}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-white/50 uppercase font-bold">Imposto Médio (%)</label>
                 <input 
                   type="number" 
-                  className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none focus:border-acelerar-light-blue"
+                  className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white outline-none focus:border-acelerar-light-blue"
                   value={reajustes.imposto.percentual}
                   onChange={(e) => setReajustes({...reajustes, imposto: {...reajustes.imposto, percentual: e.target.value}})}
                 />
@@ -165,7 +176,7 @@ export default function PremissasPage() {
                     <label className="text-[10px] text-white/40 uppercase font-bold">Reajuste %</label>
                     <input 
                       type="number" 
-                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none focus:border-acelerar-light-blue"
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white outline-none focus:border-acelerar-light-blue"
                       value={dissidios[grupo].percentual}
                       onChange={(e) => setDissidios({...dissidios, [grupo]: {...dissidios[grupo], percentual: e.target.value}})}
                     />
@@ -173,11 +184,11 @@ export default function PremissasPage() {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] text-white/40 uppercase font-bold">Mês</label>
                     <select 
-                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
+                      className={selectStyle}
                       value={dissidios[grupo].mes}
                       onChange={(e) => setDissidios({...dissidios, [grupo]: {...dissidios[grupo], mes: e.target.value}})}
                     >
-                      {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
+                      {MESES.map((m, i) => <option key={m} value={i+1} className={optionStyle}>{m}</option>)}
                     </select>
                   </div>
                 </div>
@@ -215,28 +226,28 @@ export default function PremissasPage() {
                     <tr key={h.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-2 px-2">
                         <select 
-                          className="bg-white/5 border border-white/10 rounded p-1 text-xs outline-none w-full"
+                          className={selectStyle + " w-full"}
                           value={h.grupo}
                           onChange={(e) => updateHeadcount(h.id, 'grupo', e.target.value)}
                         >
-                          {GRUPOS_PESSOAL.map(g => <option key={g} value={g}>{g}</option>)}
+                          {GRUPOS_PESSOAL.map(g => <option key={g} value={g} className={optionStyle}>{g}</option>)}
                         </select>
                       </td>
                       <td className="py-2 px-2">
                         <select 
-                          className="bg-white/5 border border-white/10 rounded p-1 text-xs outline-none w-full"
+                          className={selectStyle + " w-full"}
                           value={h.regime}
                           onChange={(e) => updateHeadcount(h.id, 'regime', e.target.value)}
                         >
-                          <option value="CLT">CLT</option>
-                          <option value="PJ">PJ</option>
-                          <option value="ESTAGIO">Estágio</option>
+                          <option value="CLT" className={optionStyle}>CLT</option>
+                          <option value="PJ" className={optionStyle}>PJ</option>
+                          <option value="ESTAGIO" className={optionStyle}>Estágio</option>
                         </select>
                       </td>
                       <td className="py-2 px-2">
                         <input 
                           type="number" 
-                          className="bg-white/5 border border-white/10 rounded p-1 text-xs outline-none w-full"
+                          className="bg-white/5 border border-white/10 rounded p-1 text-xs text-white outline-none w-full"
                           value={h.salario}
                           onChange={(e) => updateHeadcount(h.id, 'salario', e.target.value)}
                         />
@@ -245,18 +256,18 @@ export default function PremissasPage() {
                         <input 
                           type="number" 
                           step="0.1"
-                          className="bg-white/5 border border-white/10 rounded p-1 text-xs outline-none w-full"
+                          className="bg-white/5 border border-white/10 rounded p-1 text-xs text-white outline-none w-full"
                           value={h.fator}
                           onChange={(e) => updateHeadcount(h.id, 'fator', e.target.value)}
                         />
                       </td>
                       <td className="py-2 px-2">
                         <select 
-                          className="bg-white/5 border border-white/10 rounded p-1 text-xs outline-none w-full"
+                          className={selectStyle + " w-full"}
                           value={h.mes_inicio}
                           onChange={(e) => updateHeadcount(h.id, 'mes_inicio', e.target.value)}
                         >
-                          {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
+                          {MESES.map((m, i) => <option key={m} value={i+1} className={optionStyle}>{m}</option>)}
                         </select>
                       </td>
                       <td className="py-2 px-2 font-bold text-green-400">
