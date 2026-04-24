@@ -8,7 +8,6 @@ function NavLink({ href, children }) {
     const pathname = usePathname();
     const isActive = pathname === href;
 
-    // --- CORREÇÃO: Estilo do botão ativo alterado para o padrão azul ---
     return (
         <a 
             href={href} 
@@ -43,12 +42,17 @@ export default function FinanceiroLayout({ children }) {
             <div className="flex flex-1 overflow-hidden">
                 {/* Menu Lateral Esquerdo */}
                 <aside className="w-56 bg-black/20 p-4 flex-shrink-0 flex flex-col gap-2">
-                    <h2 className="text-lg font-semibold text-white/90 mb-4 px-2">Relatórios</h2>
+                    {/* Seção de Relatórios */}
+                    <h2 className="text-lg font-semibold text-white/90 mb-2 px-2">Relatórios</h2>
                     <NavLink href="/financeiro/dashboard">Dashboard</NavLink>
                     <NavLink href="/financeiro/bp">Balanço Patrimonial</NavLink>
                     <NavLink href="/financeiro/dre">DRE</NavLink>
                     <NavLink href="/financeiro/dfc">DFC</NavLink>
-                    {/* Outros links podem ser adicionados aqui */}
+
+                    {/* Seção de Planejamento (FP&A) */}
+                    <h2 className="text-lg font-semibold text-white/90 mt-6 mb-2 px-2">Planejamento</h2>
+                    <NavLink href="/financeiro/fpa/premissas">Premissas</NavLink>
+                    <NavLink href="/financeiro/fpa/orcamento">Orçamento</NavLink>
                 </aside>
                 
                 {/* Área de Conteúdo Principal */}
