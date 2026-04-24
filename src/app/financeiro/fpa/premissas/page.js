@@ -3,15 +3,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const EMPRESAS = [
-  { id: 'victec', nome: 'Victec', logo: "/logo_victec.png" },
-  { id: 'vmctech', nome: 'VMC Tech', logo: '/logos/vmctech.png' },
-  { id: 'grt', nome: 'GRT', logo: '/logos/grt.png' },
-  { id: 'bllog', nome: 'Bllog', logo: '/logos/bllog.png' },
-  { id: 'm3', nome: 'M3', logo: '/logos/m3.png' },
-  { id: 'acelerar', nome: 'Acelerar', logo: '/logos/acelerar.png' },
-  { id: 'blive', nome: 'bLive', logo: '/logos/blive.png' },
-  { id: 'condway', nome: 'Condway', logo: '/logos/condway.png' },
-  { id: 'isket', nome: 'Isket', logo: '/logos/isket.png' },
+  { id: 'victec', nome: "Victec", logo: "/logo_victec.png" },
+  { id: 'vmctech', nome: "VMC Tech", logo: "/logo_vmctech.png" },
+  { id: 'grt', nome: "GRT", logo: "/logo_GRT.png" },
+  { id: 'bllog', nome: "Bllog", logo: "/logo_bllog.png" },
+  { id: 'm3', nome: "M3", logo: "/logo_m3sistemas.png" },
+  { id: 'acelerar', nome: "Acelerar", logo: "/logo_acelerar_sidebar.png" },
+  { id: 'blive', nome: "bLive", logo: "/logo_blive.png" },
+  { id: 'condway', nome: "Condway", logo: "/logo_condway.png" },
+  { id: 'isket', nome: "Isket", logo: "/logo_isket.png" },
 ];
 
 const GRUPOS_PESSOAL = [
