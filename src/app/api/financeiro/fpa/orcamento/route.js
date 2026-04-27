@@ -11,7 +11,6 @@ export async function POST(request) {
     const body = await request.json();
     const { empresa, ano, tipo, nome, dados, premissas, headcounts } = body;
 
-    // 1. Criar nova versão
     const { data: versao, error: vError } = await supabase
       .from("fpa_versoes")
       .insert([{
@@ -27,7 +26,6 @@ export async function POST(request) {
     if (vError) throw vError;
     const versaoId = versao.id;
 
-    // 2. Buscar Plano de Contas para mapeamento (Otimizado: uma única chamada)
     const { data: plano } = await supabase.from("plano_contas_dre").select("codigo_9_digitos, categoria_nibo, grupo_dre");
     const planoMap = {};
     plano.forEach(p => {
@@ -35,7 +33,6 @@ export async function POST(request) {
       planoMap[key] = p.grupo_dre;
     });
 
-    // 3. Salvar Premissas
     if (premissas && premissas.length > 0) {
       const premissasParaSalvar = premissas.map(p => ({
         versao_id: versaoId,
@@ -47,7 +44,6 @@ export async function POST(request) {
       await supabase.from("fpa_premissas").insert(premissasParaSalvar);
     }
 
-    // 4. Preparar registros em lote (Bulk Insert)
     const registrosParaSalvar = [];
     const chaves = Object.keys(dados);
 
@@ -55,11 +51,10 @@ export async function POST(request) {
       for (const key of chaves) {
         const grupo = planoMap[key] || "OUTROS";
         let valorBase = parseFloat(dados[key][mes - 1] || 0);
-        if (valorBase === 0) continue; // Pula valores zerados para economizar espaço
+        if (valorBase === 0) continue;
 
         let valorFinal = valorBase;
 
-        // Aplicação básica de premissas (Inflação/Reajuste)
         const premissaAtiva = premissas?.find(p => 
           p.grupo === grupo && mes >= p.mes_inicio && 
           ['INFLACAO', 'DISSIDIO', 'REAJUSTE_EXPONTANEO'].includes(p.tipo_premissa)
@@ -81,7 +76,6 @@ export async function POST(request) {
       }
     }
 
-    // Inserção em lotes de 500 para evitar limites do Supabase/Postgres
     for (let i = 0; i < registrosParaSalvar.length; i += 500) {
       const batch = registrosParaSalvar.slice(i, i + 500);
       const { error: dError } = await supabase.from("fpa_orcamento_base").insert(batch);
