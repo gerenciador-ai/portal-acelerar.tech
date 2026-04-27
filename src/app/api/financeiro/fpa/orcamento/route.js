@@ -26,7 +26,8 @@ export async function POST(request) {
     if (vError) throw vError;
     const versaoId = versao.id;
 
-    const { data: plano } = await supabase.from("plano_contas_dre").select("codigo_9_digitos, categoria_nibo, grupo_dre");
+    // ✅ CORREÇÃO: Adicionar descricao_orcamento à query
+    const { data: plano } = await supabase.from("plano_contas_dre").select("codigo_9_digitos, categoria_nibo, grupo_dre, descricao_orcamento");
     const planoMap = {};
     plano.forEach(p => {
       const key = p.codigo_9_digitos || p.categoria_nibo;
@@ -96,6 +97,7 @@ export async function GET(request) {
     const mode = searchParams.get("mode");
 
     if (mode === "plano") {
+      // ✅ CORREÇÃO: Adicionar descricao_orcamento à query
       const { data, error } = await supabase
         .from("plano_contas_dre")
         .select("*")
