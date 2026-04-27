@@ -19,16 +19,23 @@ export async function POST(request) {
         ano: ano,
         tipo: tipo,
         nome_identificador: nome,
-        versao_numero: Math.floor(Date.now() / 1000) // Timestamp como versão simples
+        versao_numero: Math.floor(Date.now() / 1000)
       }])
       .select()
       .single();
 
     if (vError) throw vError;
-
     const versaoId = versao.id;
 
-    // 2. Salvar Premissas vinculadas a esta versão
+    // 2. Buscar Plano de Contas para mapeamento (Otimizado: uma única chamada)
+    const { data: plano } = await supabase.from("plano_contas_dre").select("codigo_9_digitos, categoria_nibo, grupo_dre");
+    const planoMap = {};
+    plano.forEach(p => {
+      const key = p.codigo_9_digitos || p.categoria_nibo;
+      planoMap[key] = p.grupo_dre;
+    });
+
+    // 3. Salvar Premissas
     if (premissas && premissas.length > 0) {
       const premissasParaSalvar = premissas.map(p => ({
         versao_id: versaoId,
@@ -40,52 +47,33 @@ export async function POST(request) {
       await supabase.from("fpa_premissas").insert(premissasParaSalvar);
     }
 
-    // 3. Processar e Salvar Valores (Base + Projetado)
+    // 4. Preparar registros em lote (Bulk Insert)
     const registrosParaSalvar = [];
+    const chaves = Object.keys(dados);
 
-    // Itera pelos 12 meses
     for (let mes = 1; mes <= 12; mes++) {
-      // Para cada grupo do DRE
-      for (const grupo of Object.keys(dados)) {
-        let valorBase = parseFloat(dados[grupo][mes - 1] || 0);
+      for (const key of chaves) {
+        const grupo = planoMap[key] || "OUTROS";
+        let valorBase = parseFloat(dados[key][mes - 1] || 0);
+        if (valorBase === 0) continue; // Pula valores zerados para economizar espaço
+
         let valorFinal = valorBase;
 
-        // APLICAR PREMISSAS DE REAJUSTE (Inflação / Dissídio)
+        // Aplicação básica de premissas (Inflação/Reajuste)
         const premissaAtiva = premissas?.find(p => 
-          p.grupo === grupo && 
-          mes >= p.mes_inicio && 
-          (p.tipo === 'INFLACAO' || p.tipo === 'DISSIDIO' || p.tipo === 'REAJUSTE_EXPONTANEO')
+          p.grupo === grupo && mes >= p.mes_inicio && 
+          ['INFLACAO', 'DISSIDIO', 'REAJUSTE_EXPONTANEO'].includes(p.tipo_premissa)
         );
-
         if (premissaAtiva) {
           valorFinal = valorFinal * (1 + (parseFloat(premissaAtiva.percentual) / 100));
-        }
-
-        // APLICAR HEADCOUNT (Se o grupo for de PESSOAL)
-        if (grupo.includes("PESSOAL") && headcounts) {
-          const novasContratacoes = headcounts.filter(h => 
-            h.grupo === grupo && mes >= h.mes_inicio
-          );
-          
-          for (const h of novasContratacoes) {
-            const custoTotal = parseFloat(h.salario) * parseFloat(h.fator);
-            valorFinal += custoTotal;
-          }
-        }
-
-        // APLICAR IMPOSTOS (Se o grupo for DEDUÇÕES E IMPOSTOS)
-        if (grupo === "(-) DEDUÇÕES E IMPOSTOS") {
-          const premissaImposto = premissas?.find(p => p.tipo === 'IMPOSTO');
-          if (premissaImposto) {
-            const receitaMes = parseFloat(dados["RECEITAS OPERACIONAIS"][mes - 1] || 0);
-            valorFinal = (receitaMes * (parseFloat(premissaImposto.percentual) / 100)) * -1;
-          }
         }
 
         registrosParaSalvar.push({
           versao_id: versaoId,
           empresa_nome: empresa,
           grupo_dre: grupo,
+          codigo_9_digitos: key.length === 9 && /^\d+$/.test(key) ? key : null,
+          categoria_nibo: key.length !== 9 || !/^\d+$/.test(key) ? key : null,
           mes: mes,
           valor_base: valorBase,
           valor_projetado: valorFinal
@@ -93,8 +81,12 @@ export async function POST(request) {
       }
     }
 
-    const { error: dError } = await supabase.from("fpa_orcamento_base").insert(registrosParaSalvar);
-    if (dError) throw dError;
+    // Inserção em lotes de 500 para evitar limites do Supabase/Postgres
+    for (let i = 0; i < registrosParaSalvar.length; i += 500) {
+      const batch = registrosParaSalvar.slice(i, i + 500);
+      const { error: dError } = await supabase.from("fpa_orcamento_base").insert(batch);
+      if (dError) throw dError;
+    }
 
     return NextResponse.json({ success: true, versaoId });
 
@@ -105,21 +97,32 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const empresa = searchParams.get("empresa");
-  const ano = searchParams.get("ano");
+  try {
+    const { searchParams } = new URL(request.url);
+    const mode = searchParams.get("mode");
 
-  const { data, error } = await supabase
-    .from("fpa_versoes")
-    .select(`
-      *,
-      fpa_orcamento_base (*),
-      fpa_premissas (*)
-    `)
-    .eq("empresa_nome", empresa)
-    .eq("ano", ano)
-    .order("created_at", { ascending: false });
+    if (mode === "plano") {
+      const { data, error } = await supabase
+        .from("plano_contas_dre")
+        .select("*")
+        .not("descricao_orcamento", "is", null)
+        .order("grupo_dre", { ascending: true });
+      if (error) throw error;
+      return NextResponse.json(data);
+    }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+    const empresa = searchParams.get("empresa");
+    const ano = searchParams.get("ano");
+    const { data, error } = await supabase
+      .from("fpa_versoes")
+      .select(`*, fpa_orcamento_base (*), fpa_premissas (*)`)
+      .eq("empresa_nome", empresa)
+      .eq("ano", ano)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
