@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
 const EMPRESAS = [
@@ -68,10 +68,8 @@ export default function OrcamentoPage() {
   const [loading, setLoading] = useState(false);
   const [planoContas, setPlanoContas] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
-  
   const [grid, setGrid] = useState({});
 
-  // Carregar Plano de Contas com Descrição Orçamento
   useEffect(() => {
     const fetchPlano = async () => {
       try {
@@ -79,7 +77,6 @@ export default function OrcamentoPage() {
         const data = await res.json();
         setPlanoContas(data);
         
-        // Inicializar grid com as categorias encontradas
         const initialGrid = {};
         data.forEach(cat => {
           const key = cat.codigo_9_digitos || cat.categoria_nibo;
@@ -112,7 +109,6 @@ export default function OrcamentoPage() {
     }));
   };
 
-  // Agrupar categorias por Linha Mestra
   const categoriasPorGrupo = useMemo(() => {
     const map = {};
     LINHAS_DRE_MESTRAS.forEach(grupo => {
@@ -121,12 +117,11 @@ export default function OrcamentoPage() {
     return map;
   }, [planoContas]);
 
-  // Calcular totais por grupo
   const totaisGrupo = useMemo(() => {
     const totais = {};
     LINHAS_DRE_MESTRAS.forEach(grupo => {
       totais[grupo] = Array(12).fill(0);
-      const categorias = categoriasPorGrupo[grupo];
+      const categorias = categoriasPorGrupo[grupo] || [];
       categorias.forEach(cat => {
         const key = cat.codigo_9_digitos || cat.categoria_nibo;
         const valores = grid[key] || Array(12).fill(0);
@@ -238,7 +233,6 @@ export default function OrcamentoPage() {
               <tbody>
                 {LINHAS_DRE_MESTRAS.map((grupo) => (
                   <React.Fragment key={grupo}>
-                    {/* Linha Mestra (Grupo) */}
                     <tr className="bg-white/5 border-b border-white/10 cursor-pointer hover:bg-white/10 transition-colors" onClick={() => toggleGroup(grupo)}>
                       <td className="py-3 px-4 font-bold text-acelerar-light-blue sticky left-0 bg-acelerar-dark-blue z-10 shadow-r flex items-center gap-2">
                         <span className={`transition-transform duration-200 ${expandedGroups[grupo] ? 'rotate-90' : ''}`}>▶</span>
@@ -251,8 +245,7 @@ export default function OrcamentoPage() {
                       ))}
                     </tr>
                     
-                    {/* Categorias (Drill-down) */}
-                    {expandedGroups[grupo] && categoriasPorGrupo[grupo].map((cat) => {
+                    {expandedGroups[grupo] && (categoriasPorGrupo[grupo] || []).map((cat) => {
                       const key = cat.codigo_9_digitos || cat.categoria_nibo;
                       return (
                         <tr key={key} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
@@ -299,5 +292,3 @@ export default function OrcamentoPage() {
     </div>
   );
 }
-
-import React from 'react';
