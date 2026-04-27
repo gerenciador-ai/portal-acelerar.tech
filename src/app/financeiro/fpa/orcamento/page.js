@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
 const EMPRESAS = [
@@ -13,6 +13,23 @@ const EMPRESAS = [
   { id: 'condway', nome: "Condway", logo: "/logo_condway.png" },
   { id: 'isket', nome: "Isket", logo: "/logo_isket.png" }
 ];
+
+const LINHAS_DRE_MESTRAS = [
+  "RECEITAS OPERACIONAIS",
+  "(-) DEDUÇÕES E IMPOSTOS",
+  "(-) PESSOAL COMERCIAL",
+  "(-) FERRAMENTAS E MKT COMERCIAL",
+  "(-) PESSOAL OPERACIONAL",
+  "(-) INFRA E SOFTWARES OPERACIONAIS",
+  "(-) PESSOAL ADMINISTRATIVO",
+  "(-) INFRA E GESTÃO ADMINISTRATIVA",
+  "(-) INVESTIMENTO EM PRODUTO",
+  "(-) DEPRECIAÇÃO E AMORTIZAÇÃO",
+  "(+/-) RESULTADO FINANCEIRO",
+  "OUTROS / NÃO CLASSIFICADOS"
+];
+
+const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
 function EmpresaTab({ nome, logo, isActive, onClick }) {
   const isVMC = nome === 'VMC Tech';
@@ -43,51 +60,83 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
   );
 }
 
-const LINHAS_DRE = [
-  "RECEITAS OPERACIONAIS",
-  "(-) DEDUÇÕES E IMPOSTOS",
-  "(-) PESSOAL COMERCIAL",
-  "(-) FERRAMENTAS E MKT COMERCIAL",
-  "(-) PESSOAL OPERACIONAL",
-  "(-) INFRA E SOFTWARES OPERACIONAIS",
-  "(-) PESSOAL ADMINISTRATIVO",
-  "(-) INFRA E GESTÃO ADMINISTRATIVA",
-  "(-) INVESTIMENTO EM PRODUTO",
-  "(-) DEPRECIAÇÃO E AMORTIZAÇÃO",
-  "(+/-) RESULTADO FINANCEIRO",
-  "OUTROS / NÃO CLASSIFICADOS"
-];
-
-const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
-
 export default function OrcamentoPage() {
   const [empresaAtiva, setEmpresaAtiva] = useState(null);
   const [anoAtivo, setAnoAtivo] = useState(new Date().getFullYear());
   const [tipoVersao, setTipoVersao] = useState('BUDGET');
   const [nomeVersao, setNomeVersao] = useState('');
   const [loading, setLoading] = useState(false);
+  const [planoContas, setPlanoContas] = useState([]);
+  const [expandedGroups, setExpandedGroups] = useState({});
   
-  const [grid, setGrid] = useState(
-    LINHAS_DRE.reduce((acc, linha) => ({
-      ...acc,
-      [linha]: Array(12).fill(0)
-    }), {})
-  );
+  const [grid, setGrid] = useState({});
 
-  const updateCell = (linha, mesIdx, valor) => {
-    const novoGrid = { ...grid };
-    novoGrid[linha][mesIdx] = parseFloat(valor) || 0;
-    setGrid(novoGrid);
+  // Carregar Plano de Contas com Descrição Orçamento
+  useEffect(() => {
+    const fetchPlano = async () => {
+      try {
+        const res = await fetch('/api/financeiro/fpa/orcamento?mode=plano');
+        const data = await res.json();
+        setPlanoContas(data);
+        
+        // Inicializar grid com as categorias encontradas
+        const initialGrid = {};
+        data.forEach(cat => {
+          const key = cat.codigo_9_digitos || cat.categoria_nibo;
+          initialGrid[key] = Array(12).fill(0);
+        });
+        setGrid(initialGrid);
+      } catch (error) {
+        console.error("Erro ao carregar plano de contas:", error);
+      }
+    };
+    fetchPlano();
+  }, []);
+
+  const toggleGroup = (group) => {
+    setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
-  const propagarValor = (linha, mesIdx) => {
-    const valorParaCopiar = grid[linha][mesIdx];
-    const novoGrid = { ...grid };
-    for (let i = mesIdx + 1; i < 12; i++) {
-      novoGrid[linha][i] = valorParaCopiar;
-    }
-    setGrid(novoGrid);
+  const updateCell = (key, mesIdx, valor) => {
+    setGrid(prev => ({
+      ...prev,
+      [key]: prev[key].map((v, i) => i === mesIdx ? (parseFloat(valor) || 0) : v)
+    }));
   };
+
+  const propagarValor = (key, mesIdx) => {
+    const valorParaCopiar = grid[key][mesIdx];
+    setGrid(prev => ({
+      ...prev,
+      [key]: prev[key].map((v, i) => i > mesIdx ? valorParaCopiar : v)
+    }));
+  };
+
+  // Agrupar categorias por Linha Mestra
+  const categoriasPorGrupo = useMemo(() => {
+    const map = {};
+    LINHAS_DRE_MESTRAS.forEach(grupo => {
+      map[grupo] = planoContas.filter(cat => cat.grupo_dre === grupo);
+    });
+    return map;
+  }, [planoContas]);
+
+  // Calcular totais por grupo
+  const totaisGrupo = useMemo(() => {
+    const totais = {};
+    LINHAS_DRE_MESTRAS.forEach(grupo => {
+      totais[grupo] = Array(12).fill(0);
+      const categorias = categoriasPorGrupo[grupo];
+      categorias.forEach(cat => {
+        const key = cat.codigo_9_digitos || cat.categoria_nibo;
+        const valores = grid[key] || Array(12).fill(0);
+        valores.forEach((v, i) => {
+          totais[grupo][i] += v;
+        });
+      });
+    });
+    return totais;
+  }, [grid, categoriasPorGrupo]);
 
   const handleSalvar = async () => {
     if (!empresaAtiva) return alert("Selecione uma empresa");
@@ -95,9 +144,25 @@ export default function OrcamentoPage() {
     setLoading(true);
     
     try {
-      alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
+      const res = await fetch('/api/financeiro/fpa/orcamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa: empresaAtiva.nome,
+          ano: anoAtivo,
+          tipo: tipoVersao,
+          nome: nomeVersao,
+          dados: grid
+        })
+      });
+      
+      if (res.ok) {
+        alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
+      } else {
+        throw new Error("Erro ao salvar");
+      }
     } catch (error) {
-      alert("Erro ao salvar orçamento");
+      alert("Erro ao salvar orçamento: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -108,7 +173,6 @@ export default function OrcamentoPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Abas de Empresas (Padrão DFC) */}
       <div className="flex items-center bg-black/20 rounded-xl border border-white/10 overflow-x-auto no-scrollbar">
         {EMPRESAS.map((emp) => (
           <EmpresaTab
@@ -121,25 +185,16 @@ export default function OrcamentoPage() {
         ))}
       </div>
 
-      {/* Cabeçalho de Configuração da Versão */}
       <div className="flex flex-wrap gap-4 items-center bg-black/20 p-4 rounded-xl border border-white/10 shadow-xl">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Ano</label>
-          <select 
-            value={anoAtivo} 
-            onChange={(e) => setAnoAtivo(e.target.value)}
-            className={selectStyle}
-          >
+          <select value={anoAtivo} onChange={(e) => setAnoAtivo(e.target.value)} className={selectStyle}>
             {[2024, 2025, 2026].map(ano => <option key={ano} value={ano} className={optionStyle}>{ano}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Tipo</label>
-          <select 
-            value={tipoVersao} 
-            onChange={(e) => setTipoVersao(e.target.value)}
-            className={selectStyle}
-          >
+          <select value={tipoVersao} onChange={(e) => setTipoVersao(e.target.value)} className={selectStyle}>
             <option value="BUDGET" className={optionStyle}>BUDGET (Orçamento)</option>
             <option value="FORECAST" className={optionStyle}>FORECAST (Revisão)</option>
           </select>
@@ -171,54 +226,78 @@ export default function OrcamentoPage() {
       ) : (
         <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-[10px] border-collapse">
               <thead>
                 <tr className="bg-white/5 text-white/40 border-b border-white/10">
-                  <th className="py-4 px-4 font-bold uppercase sticky left-0 bg-acelerar-dark-blue z-10 min-w-[250px] shadow-r">Linha do DRE</th>
+                  <th className="py-4 px-4 font-bold uppercase sticky left-0 bg-acelerar-dark-blue z-10 min-w-[300px] shadow-r text-xs">Estrutura DRE / Orçamento</th>
                   {MESES.map(m => (
                     <th key={m} className="py-4 px-2 font-bold text-center min-w-[100px]">{m}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {LINHAS_DRE.map((linha) => (
-                  <tr key={linha} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                    <td className="py-3 px-4 font-medium text-white/80 sticky left-0 bg-acelerar-dark-blue group-hover:bg-white/5 z-10 shadow-r">
-                      {linha}
-                    </td>
-                    {MESES.map((m, idx) => (
-                      <td key={m} className="py-2 px-1">
-                        <div className="relative flex items-center group/cell">
-                          <input 
-                            type="number" 
-                            className="w-full bg-white/5 border border-white/10 rounded p-2 text-right text-white outline-none focus:border-acelerar-light-blue transition-all"
-                            value={grid[linha][idx]}
-                            onChange={(e) => updateCell(linha, idx, e.target.value)}
-                          />
-                          {idx < 11 && (
-                            <button 
-                              onClick={() => propagarValor(linha, idx)}
-                              title="Propagar para os meses seguintes"
-                              className="absolute -right-1 opacity-0 group-hover/cell:opacity-100 bg-acelerar-light-blue text-white rounded-full p-1 shadow-lg hover:scale-110 transition-all z-20"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
+                {LINHAS_DRE_MESTRAS.map((grupo) => (
+                  <React.Fragment key={grupo}>
+                    {/* Linha Mestra (Grupo) */}
+                    <tr className="bg-white/5 border-b border-white/10 cursor-pointer hover:bg-white/10 transition-colors" onClick={() => toggleGroup(grupo)}>
+                      <td className="py-3 px-4 font-bold text-acelerar-light-blue sticky left-0 bg-acelerar-dark-blue z-10 shadow-r flex items-center gap-2">
+                        <span className={`transition-transform duration-200 ${expandedGroups[grupo] ? 'rotate-90' : ''}`}>▶</span>
+                        {grupo}
                       </td>
-                    ))}
-                  </tr>
+                      {MESES.map((m, idx) => (
+                        <td key={m} className="py-3 px-2 text-right font-bold text-white/90">
+                          {totaisGrupo[grupo][idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      ))}
+                    </tr>
+                    
+                    {/* Categorias (Drill-down) */}
+                    {expandedGroups[grupo] && categoriasPorGrupo[grupo].map((cat) => {
+                      const key = cat.codigo_9_digitos || cat.categoria_nibo;
+                      return (
+                        <tr key={key} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                          <td className="py-2 px-8 font-medium text-white/60 sticky left-0 bg-acelerar-dark-blue group-hover:bg-white/5 z-10 shadow-r italic">
+                            {cat.descricao_orcamento}
+                            <span className="block text-[8px] text-white/20 font-normal">{key}</span>
+                          </td>
+                          {MESES.map((m, idx) => (
+                            <td key={m} className="py-1 px-1">
+                              <div className="relative flex items-center group/cell">
+                                <input 
+                                  type="number" 
+                                  className="w-full bg-white/5 border border-white/10 rounded p-1.5 text-right text-white outline-none focus:border-acelerar-light-blue transition-all text-[10px]"
+                                  value={grid[key]?.[idx] || 0}
+                                  onChange={(e) => updateCell(key, idx, e.target.value)}
+                                />
+                                {idx < 11 && (
+                                  <button 
+                                    onClick={() => propagarValor(key, idx)}
+                                    title="Propagar para os meses seguintes"
+                                    className="absolute -right-1 opacity-0 group-hover/cell:opacity-100 bg-acelerar-light-blue text-white rounded-full p-1 shadow-lg hover:scale-110 transition-all z-20"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-2 w-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
           </div>
           <div className="bg-white/5 p-4 text-white/30 text-[10px] italic">
-            * Os valores acima são os valores base. Os reajustes de premissas e headcount serão aplicados automaticamente após o salvamento.
+            * Expanda as linhas mestras para detalhar o orçamento por categoria. Os valores base informados serão ajustados pelas premissas ao salvar.
           </div>
         </div>
       )}
     </div>
   );
 }
+
+import React from 'react';
