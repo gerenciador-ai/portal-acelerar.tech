@@ -87,8 +87,9 @@ function DFCContent() {
   const [dadosDiario, setDadosDiario] = useState(null);
   const [loadingDiario, setLoadingDiario] = useState(false);
   const [captacaoManual, setCaptacaoManual] = useState({});
-  // saldoInicialMes: calculado em cascata pelo frontend com base no DFC mensal
-  const [saldoInicialMes, setSaldoInicialMes] = useState(0);
+  // Dropdowns customizados (evita fundo branco do <select> nativo no browser)
+  const [dropdownMesAberto, setDropdownMesAberto] = useState(false);
+  const [dropdownAnoAberto, setDropdownAnoAberto] = useState(false);
 
   const empresas = [
     { nome: "VMC Tech", logo: "/logo_vmctech.png" },
@@ -119,20 +120,7 @@ function DFCContent() {
     }
   }, [visao, empresaAtiva, mesDiario, anoAtivo]);
 
-  // Ao carregar dados diários, calcula o saldo inicial do mês selecionado
-  // usando o cache do DFC mensal (saldo em cascata)
-  useEffect(() => {
-    if (visao === 'Diário' && dados && dados.saldoInicial !== undefined) {
-      const saldoBase = dados.saldoInicial || 0;
-      const matrizGerencial = gerarDadosGerenciaisParaSaldo(dados);
-      let saldo = saldoBase;
-      for (let m = 0; m < mesDiario - 1; m++) {
-        const linhaResultado = matrizGerencial?.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
-        if (linhaResultado) saldo += (linhaResultado.valores[m] || 0);
-      }
-      setSaldoInicialMes(saldo);
-    }
-  }, [visao, mesDiario, dados]);
+
 
   const carregarDados = async (nomeEmpresa) => {
     setLoading(true);
@@ -365,56 +353,6 @@ function DFCContent() {
     return d;
   }, [dados, cacheDados, empresaAtiva]);
 
-  // Função auxiliar para calcular saldo em cascata (usada para obter saldo inicial do mês diário)
-  const gerarDadosGerenciaisParaSaldo = (dadosBase) => {
-    if (!dadosBase || !dadosBase.matriz) return null;
-    const matrizReal = dadosBase.matriz;
-    const recuperacao = dadosBase.recuperacaoIntercompany || new Array(12).fill(0);
-    const rateio = dadosBase.rateioRecebidoIntercompany || new Array(12).fill(0);
-
-    const LINHAS = [
-      { key: "RECEITAS OPERACIONAIS", tipo: "linha" },
-      { key: "(-) IMPOSTOS SOBRE VENDAS", tipo: "linha" },
-      { key: "(=) RECEITA LÍQUIDA", tipo: "calculado" },
-      { key: "(-) CUSTOS OPERACIONAIS", tipo: "linha" },
-      { key: "(-) DESPESAS ADMINISTRATIVAS", tipo: "linha" },
-      { key: "(-) DESPESAS COMERCIAIS", tipo: "linha" },
-      { key: "(=) FLUXO OPERACIONAL (FCO)", tipo: "calculado" },
-      { key: "(+) RECUPERAÇÃO INTERCOMPANY", tipo: "linha" },
-      { key: "(-) RATEIO RECEBIDO INTERCOMPANY", tipo: "linha" },
-      { key: "(=) FLUXO OPERACIONAL GERENCIAL (FCO)", tipo: "calculado" },
-      { key: "(+/-) FLUXO DE INVESTIMENTO (FCI)", tipo: "linha" },
-      { key: "(-) DESPESAS FINANCEIRAS", tipo: "linha" },
-      { key: "OUTROS / NÃO CLASSIFICADOS", tipo: "linha" },
-      { key: "(=) SALDO LÍQUIDO DO PERÍODO", tipo: "calculado" },
-    ];
-
-    const matriz = LINHAS.map(linha => {
-      const valores = new Array(12).fill(0).map((_, mIdx) => {
-        if (linha.tipo === "calculado") return null;
-        if (linha.key === "(+) RECUPERAÇÃO INTERCOMPANY") return recuperacao[mIdx];
-        if (linha.key === "(-) RATEIO RECEBIDO INTERCOMPANY") return -rateio[mIdx];
-        const linhaReal = matrizReal.find(l => l.key === linha.key);
-        return linhaReal ? linhaReal.valores[mIdx] : 0;
-      });
-      return { ...linha, valores };
-    });
-
-    for (let m = 0; m < 12; m++) {
-      const get = (k) => matriz.find(r => r.key === k)?.valores[m] || 0;
-      const set = (k, v) => { const row = matriz.find(r => r.key === k); if (row) row.valores[m] = v; };
-      const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
-      set("(=) RECEITA LÍQUIDA", recLiq);
-      const fcoReal = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
-      set("(=) FLUXO OPERACIONAL (FCO)", fcoReal);
-      const fcoGer = fcoReal + get("(+) RECUPERAÇÃO INTERCOMPANY") + get("(-) RATEIO RECEBIDO INTERCOMPANY");
-      set("(=) FLUXO OPERACIONAL GERENCIAL (FCO)", fcoGer);
-      const saldo = fcoGer + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
-      set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
-    }
-    return matriz;
-  };
-
   const gerarDadosGerenciais = useMemo(() => {
     const d = dadosComIntercompanyCruzado;
     if (!d || !d.matriz) return null;
@@ -465,6 +403,20 @@ function DFCContent() {
     }
     return matrizGerencial;
   }, [dadosComIntercompanyCruzado]);
+
+  // Saldo inicial do mês diário: calculado em cascata usando o useMemo gerencial já disponível
+  // Isso garante que o saldo use os mesmos dados (com Intercompany) exibidos na tabela mensal
+  const saldoInicialMes = useMemo(() => {
+    if (!dados || !gerarDadosGerenciais) return 0;
+    const saldoBase = dados.saldoInicial || 0;
+    const linhaResultado = gerarDadosGerenciais.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
+    if (!linhaResultado) return saldoBase;
+    let saldo = saldoBase;
+    for (let m = 0; m < mesDiario - 1; m++) {
+      saldo += (linhaResultado.valores[m] || 0);
+    }
+    return saldo;
+  }, [dados, gerarDadosGerenciais, mesDiario]);
 
   const renderTabelaMensal = (matrizParaRenderizar, titulo, saldoInicialBase) => {
     if (!matrizParaRenderizar || !dados) return null;
@@ -766,23 +718,55 @@ function DFCContent() {
               </button>
             </div>
             {visao === 'Diário' && empresaAtiva !== 'Consolidado' && (
-              <select
-                value={mesDiario}
-                onChange={(e) => setMesDiario(parseInt(e.target.value))}
-                className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue"
-              >
-                {MESES_LABELS.map(m => (
-                  <option key={m.num} value={m.num}>{m.label}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  onClick={() => { setDropdownMesAberto(v => !v); setDropdownAnoAberto(false); }}
+                  className="flex items-center gap-2 bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 hover:bg-white/10 transition-colors"
+                >
+                  {MESES_LABELS.find(m => m.num === mesDiario)?.label}
+                  <svg className={`w-3 h-3 transition-transform ${dropdownMesAberto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {dropdownMesAberto && (
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-[#0f1e3a] border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[140px]">
+                    {MESES_LABELS.map(m => (
+                      <button
+                        key={m.num}
+                        onClick={() => { setMesDiario(m.num); setDropdownMesAberto(false); }}
+                        className={`w-full text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                          mesDiario === m.num ? 'bg-acelerar-light-blue text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-            <select
-              value={anoAtivo}
-              onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
-              className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue"
-            >
-              <option value={2026}>Ano: 2026</option>
-            </select>
+            <div className="relative">
+              <button
+                onClick={() => { setDropdownAnoAberto(v => !v); setDropdownMesAberto(false); }}
+                className="flex items-center gap-2 bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 hover:bg-white/10 transition-colors"
+              >
+                Ano: {anoAtivo}
+                <svg className={`w-3 h-3 transition-transform ${dropdownAnoAberto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {dropdownAnoAberto && (
+                <div className="absolute top-full mt-1 right-0 z-50 bg-[#0f1e3a] border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[120px]">
+                  {[2026].map(ano => (
+                    <button
+                      key={ano}
+                      onClick={() => { setAnoAtivo(ano); setDropdownAnoAberto(false); }}
+                      className={`w-full text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        anoAtivo === ano ? 'bg-acelerar-light-blue text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {ano}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
