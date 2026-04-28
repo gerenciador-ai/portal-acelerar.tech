@@ -53,6 +53,21 @@ function Modal({ isOpen, onClose, title, children }) {
   );
 }
 
+const MESES_LABELS = [
+  { num: 1,  label: 'Janeiro' },
+  { num: 2,  label: 'Fevereiro' },
+  { num: 3,  label: 'Março' },
+  { num: 4,  label: 'Abril' },
+  { num: 5,  label: 'Maio' },
+  { num: 6,  label: 'Junho' },
+  { num: 7,  label: 'Julho' },
+  { num: 8,  label: 'Agosto' },
+  { num: 9,  label: 'Setembro' },
+  { num: 10, label: 'Outubro' },
+  { num: 11, label: 'Novembro' },
+  { num: 12, label: 'Dezembro' },
+];
+
 function DFCContent() {
   const [empresaAtiva, setEmpresaAtiva] = useState(null);
   const [dados, setDados] = useState(null);
@@ -67,16 +82,24 @@ function DFCContent() {
   const [loadingDetalhamento, setLoadingDetalhamento] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Estados exclusivos da visão Diária
+  const [mesDiario, setMesDiario] = useState(new Date().getMonth() + 1);
+  const [dadosDiario, setDadosDiario] = useState(null);
+  const [loadingDiario, setLoadingDiario] = useState(false);
+  const [captacaoManual, setCaptacaoManual] = useState({});
+  // saldoInicialMes: calculado em cascata pelo frontend com base no DFC mensal
+  const [saldoInicialMes, setSaldoInicialMes] = useState(0);
+
   const empresas = [
     { nome: "VMC Tech", logo: "/logo_vmctech.png" },
-    { nome: "Victec", logo: "/logo_victec.png" },
-    { nome: "GRT", logo: "/logo_GRT.png" },
-    { nome: "Bllog", logo: "/logo_bllog.png" },
-    { nome: "M3", logo: "/logo_m3sistemas.png" },
+    { nome: "Victec",   logo: "/logo_victec.png" },
+    { nome: "GRT",      logo: "/logo_GRT.png" },
+    { nome: "Bllog",    logo: "/logo_bllog.png" },
+    { nome: "M3",       logo: "/logo_m3sistemas.png" },
     { nome: "Acelerar", logo: "/logo_acelerar_sidebar.png" },
-    { nome: "bLive", logo: "/logo_blive.png" },
-    { nome: "Condway", logo: "/logo_condway.png" },
-    { nome: "Isket", logo: "/logo_isket.png" }
+    { nome: "bLive",    logo: "/logo_blive.png" },
+    { nome: "Condway",  logo: "/logo_condway.png" },
+    { nome: "Isket",    logo: "/logo_isket.png" }
   ];
 
   useEffect(() => {
@@ -88,6 +111,28 @@ function DFCContent() {
       }
     }
   }, [empresaAtiva, anoAtivo]);
+
+  // Quando muda para visão diária ou muda o mês, carrega os dados diários
+  useEffect(() => {
+    if (visao === 'Diário' && empresaAtiva && empresaAtiva !== 'Consolidado') {
+      carregarDiario(empresaAtiva, mesDiario);
+    }
+  }, [visao, empresaAtiva, mesDiario, anoAtivo]);
+
+  // Ao carregar dados diários, calcula o saldo inicial do mês selecionado
+  // usando o cache do DFC mensal (saldo em cascata)
+  useEffect(() => {
+    if (visao === 'Diário' && dados && dados.saldoInicial !== undefined) {
+      const saldoBase = dados.saldoInicial || 0;
+      const matrizGerencial = gerarDadosGerenciaisParaSaldo(dados);
+      let saldo = saldoBase;
+      for (let m = 0; m < mesDiario - 1; m++) {
+        const linhaResultado = matrizGerencial?.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
+        if (linhaResultado) saldo += (linhaResultado.valores[m] || 0);
+      }
+      setSaldoInicialMes(saldo);
+    }
+  }, [visao, mesDiario, dados]);
 
   const carregarDados = async (nomeEmpresa) => {
     setLoading(true);
@@ -143,6 +188,23 @@ function DFCContent() {
       console.error('Erro ao consolidar DFC:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const carregarDiario = async (nomeEmpresa, mes) => {
+    setLoadingDiario(true);
+    setDadosDiario(null);
+    setCaptacaoManual({});
+    try {
+      const res = await fetch(`/api/financeiro/dfc/diario?empresa=${encodeURIComponent(nomeEmpresa)}&ano=${anoAtivo}&mes=${mes}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setDadosDiario(data);
+    } catch (error) {
+      console.error('Erro ao carregar DFC Diário:', error);
+      alert('Erro ao carregar dados diários: ' + error.message);
+    } finally {
+      setLoadingDiario(false);
     }
   };
 
@@ -303,6 +365,56 @@ function DFCContent() {
     return d;
   }, [dados, cacheDados, empresaAtiva]);
 
+  // Função auxiliar para calcular saldo em cascata (usada para obter saldo inicial do mês diário)
+  const gerarDadosGerenciaisParaSaldo = (dadosBase) => {
+    if (!dadosBase || !dadosBase.matriz) return null;
+    const matrizReal = dadosBase.matriz;
+    const recuperacao = dadosBase.recuperacaoIntercompany || new Array(12).fill(0);
+    const rateio = dadosBase.rateioRecebidoIntercompany || new Array(12).fill(0);
+
+    const LINHAS = [
+      { key: "RECEITAS OPERACIONAIS", tipo: "linha" },
+      { key: "(-) IMPOSTOS SOBRE VENDAS", tipo: "linha" },
+      { key: "(=) RECEITA LÍQUIDA", tipo: "calculado" },
+      { key: "(-) CUSTOS OPERACIONAIS", tipo: "linha" },
+      { key: "(-) DESPESAS ADMINISTRATIVAS", tipo: "linha" },
+      { key: "(-) DESPESAS COMERCIAIS", tipo: "linha" },
+      { key: "(=) FLUXO OPERACIONAL (FCO)", tipo: "calculado" },
+      { key: "(+) RECUPERAÇÃO INTERCOMPANY", tipo: "linha" },
+      { key: "(-) RATEIO RECEBIDO INTERCOMPANY", tipo: "linha" },
+      { key: "(=) FLUXO OPERACIONAL GERENCIAL (FCO)", tipo: "calculado" },
+      { key: "(+/-) FLUXO DE INVESTIMENTO (FCI)", tipo: "linha" },
+      { key: "(-) DESPESAS FINANCEIRAS", tipo: "linha" },
+      { key: "OUTROS / NÃO CLASSIFICADOS", tipo: "linha" },
+      { key: "(=) SALDO LÍQUIDO DO PERÍODO", tipo: "calculado" },
+    ];
+
+    const matriz = LINHAS.map(linha => {
+      const valores = new Array(12).fill(0).map((_, mIdx) => {
+        if (linha.tipo === "calculado") return null;
+        if (linha.key === "(+) RECUPERAÇÃO INTERCOMPANY") return recuperacao[mIdx];
+        if (linha.key === "(-) RATEIO RECEBIDO INTERCOMPANY") return -rateio[mIdx];
+        const linhaReal = matrizReal.find(l => l.key === linha.key);
+        return linhaReal ? linhaReal.valores[mIdx] : 0;
+      });
+      return { ...linha, valores };
+    });
+
+    for (let m = 0; m < 12; m++) {
+      const get = (k) => matriz.find(r => r.key === k)?.valores[m] || 0;
+      const set = (k, v) => { const row = matriz.find(r => r.key === k); if (row) row.valores[m] = v; };
+      const recLiq = get("RECEITAS OPERACIONAIS") + get("(-) IMPOSTOS SOBRE VENDAS");
+      set("(=) RECEITA LÍQUIDA", recLiq);
+      const fcoReal = recLiq + get("(-) CUSTOS OPERACIONAIS") + get("(-) DESPESAS ADMINISTRATIVAS") + get("(-) DESPESAS COMERCIAIS");
+      set("(=) FLUXO OPERACIONAL (FCO)", fcoReal);
+      const fcoGer = fcoReal + get("(+) RECUPERAÇÃO INTERCOMPANY") + get("(-) RATEIO RECEBIDO INTERCOMPANY");
+      set("(=) FLUXO OPERACIONAL GERENCIAL (FCO)", fcoGer);
+      const saldo = fcoGer + get("(+/-) FLUXO DE INVESTIMENTO (FCI)") + get("(-) DESPESAS FINANCEIRAS") + get("OUTROS / NÃO CLASSIFICADOS");
+      set("(=) SALDO LÍQUIDO DO PERÍODO", saldo);
+    }
+    return matriz;
+  };
+
   const gerarDadosGerenciais = useMemo(() => {
     const d = dadosComIntercompanyCruzado;
     if (!d || !d.matriz) return null;
@@ -433,6 +545,103 @@ function DFCContent() {
     );
   };
 
+  const renderTabelaDiaria = () => {
+    if (loadingDiario) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">Processando dados diários...</p>
+        </div>
+      );
+    }
+
+    if (!dadosDiario) return null;
+
+    const { dias, isPassado } = dadosDiario;
+    const statusLabel = isPassado ? 'REALIZADO' : 'PROJETADO';
+    const statusColor = isPassado ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400';
+
+    let saldoAcumulado = saldoInicialMes;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <span className="w-1.5 h-6 bg-acelerar-light-blue rounded-full"></span>
+          DFC DIÁRIO — {MESES_LABELS.find(m => m.num === mesDiario)?.label?.toUpperCase()} {anoAtivo} — {empresaAtiva}
+          <span className={`text-[9px] px-2 py-0.5 rounded font-bold ml-2 ${statusColor}`}>{statusLabel}</span>
+        </h3>
+        <div className="overflow-x-auto rounded-xl border border-white/10 bg-acelerar-dark-blue/50 backdrop-blur-sm">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-white/5 text-[9px] text-white/50 uppercase font-bold tracking-widest">
+                <th className="p-3 border-b border-white/10 w-24">Data</th>
+                <th className="p-3 border-b border-white/10 text-right">Saldo Inicial</th>
+                <th className="p-3 border-b border-white/10 text-right">A Receber</th>
+                <th className="p-3 border-b border-white/10 text-right">A Pagar</th>
+                <th className="p-3 border-b border-white/10 text-right">Captação de Recursos</th>
+                <th className="p-3 border-b border-white/10 text-right">Envio de Recurso</th>
+                <th className="p-3 border-b border-white/10 text-right">Rec. de Recursos</th>
+                <th className="p-3 border-b border-white/10 text-right">Saldo Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dias.map((item) => {
+                const captacao = parseFloat(captacaoManual[item.dia] || 0);
+                const saldoIniciaDia = saldoAcumulado;
+                const saldoFinal = saldoIniciaDia
+                  + item.aReceber
+                  - item.aPagar
+                  + captacao
+                  - item.envioRecurso
+                  + item.recRecursos;
+                saldoAcumulado = saldoFinal;
+
+                const temMovimento = item.aReceber !== 0 || item.aPagar !== 0 || item.recRecursos !== 0 || item.envioRecurso !== 0 || captacao !== 0;
+                const dataFormatada = new Date(item.dia + 'T12:00:00').toLocaleDateString('pt-BR');
+
+                return (
+                  <tr key={item.dia} className={`hover:bg-white/5 transition-colors ${!temMovimento ? 'opacity-40' : ''}`}>
+                    <td className="p-3 text-[11px] text-white/60 font-mono">{dataFormatada}</td>
+                    <td className={`p-3 text-[11px] text-right font-semibold ${saldoIniciaDia < 0 ? 'text-red-400' : 'text-white'}`}>
+                      {formatarMoeda(saldoIniciaDia)}
+                    </td>
+                    <td className="p-3 text-[11px] text-right text-green-400">
+                      {item.aReceber !== 0 ? formatarMoeda(item.aReceber) : '—'}
+                    </td>
+                    <td className="p-3 text-[11px] text-right text-red-400">
+                      {item.aPagar !== 0 ? formatarMoeda(item.aPagar) : '—'}
+                    </td>
+                    <td className="p-3 text-[11px] text-right">
+                      <input
+                        type="text"
+                        value={captacaoManual[item.dia] || ''}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d,]/g, '');
+                          setCaptacaoManual(prev => ({ ...prev, [item.dia]: raw }));
+                        }}
+                        placeholder="0"
+                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-right text-white focus:outline-none focus:border-acelerar-light-blue text-center"
+                      />
+                    </td>
+                    <td className="p-3 text-[11px] text-right text-red-400">
+                      {item.envioRecurso !== 0 ? formatarMoeda(item.envioRecurso) : '—'}
+                    </td>
+                    <td className="p-3 text-[11px] text-right text-green-400">
+                      {item.recRecursos !== 0 ? formatarMoeda(item.recRecursos) : '—'}
+                    </td>
+                    <td className={`p-3 text-[11px] text-right font-bold ${saldoFinal < 0 ? 'text-red-400' : 'text-acelerar-light-blue'}`}>
+                      {formatarMoeda(saldoFinal)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderDetalhamentoModal = () => {
     const meses = dados?.meses || ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
     const nomeMes = selecionado.mesIdx !== null ? meses[selecionado.mesIdx] : null;
@@ -490,7 +699,7 @@ function DFCContent() {
                 </thead>
                 <tbody>
                   {detalhamento.length === 0 ? (
-                    <tr><td colSpan={isIntercompany ? 6 : isConsolidado ? 2 : 4} className="p-12 text-center text-[11px] text-white/30 italic">Nenhum dado encontrado.</td></tr>
+                    <tr><td colSpan={4} className="p-8 text-center text-[11px] text-white/30">Nenhum lançamento encontrado.</td></tr>
                   ) : (
                     detalhamento.map((item, idx) => (
                       <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5">
@@ -542,10 +751,36 @@ function DFCContent() {
         {empresaAtiva && (
           <div className="flex items-center gap-4">
             <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button onClick={() => setVisao('Mensal')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Mensal</button>
-              <button onClick={() => setVisao('Diário')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>Diário</button>
+              <button
+                onClick={() => setVisao('Mensal')}
+                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Mensal' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+              >
+                Mensal
+              </button>
+              <button
+                onClick={() => { if (empresaAtiva !== 'Consolidado') setVisao('Diário'); }}
+                disabled={empresaAtiva === 'Consolidado'}
+                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${visao === 'Diário' ? 'bg-acelerar-light-blue text-white shadow-lg' : 'text-white/40 hover:text-white'} ${empresaAtiva === 'Consolidado' ? 'opacity-30 cursor-not-allowed' : ''}`}
+              >
+                Diário
+              </button>
             </div>
-            <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue">
+            {visao === 'Diário' && empresaAtiva !== 'Consolidado' && (
+              <select
+                value={mesDiario}
+                onChange={(e) => setMesDiario(parseInt(e.target.value))}
+                className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue"
+              >
+                {MESES_LABELS.map(m => (
+                  <option key={m.num} value={m.num}>{m.label}</option>
+                ))}
+              </select>
+            )}
+            <select
+              value={anoAtivo}
+              onChange={(e) => setAnoAtivo(parseInt(e.target.value))}
+              className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-3 py-1.5 outline-none focus:border-acelerar-light-blue"
+            >
               <option value={2026}>Ano: 2026</option>
             </select>
           </div>
@@ -562,12 +797,18 @@ function DFCContent() {
               <div className="w-8 h-8 border-2 border-acelerar-light-blue border-t-transparent rounded-full animate-spin"></div>
               <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">Processando dados...</p>
             </div>
-          ) : dados && matrizGerencialCalculada ? (
-            <div className="space-y-12 animate-in fade-in duration-500">
-              {renderTabelaMensal(dados.matriz, `DFC REAL - MOVIMENTAÇÕES BANCÁRIAS - ${empresaAtiva}`, dados.saldoInicial)}
-              {renderTabelaMensal(matrizGerencialCalculada, `DFC GERENCIAL - CONSIDERANDO OPERAÇÕES INTERCOMPANY - ${empresaAtiva}`, dados.saldoInicial)}
+          ) : visao === 'Mensal' ? (
+            dados && matrizGerencialCalculada ? (
+              <div className="space-y-12 animate-in fade-in duration-500">
+                {renderTabelaMensal(dados.matriz, `DFC REAL - MOVIMENTAÇÕES BANCÁRIAS - ${empresaAtiva}`, dados.saldoInicial)}
+                {renderTabelaMensal(matrizGerencialCalculada, `DFC GERENCIAL - CONSIDERANDO OPERAÇÕES INTERCOMPANY - ${empresaAtiva}`, dados.saldoInicial)}
+              </div>
+            ) : null
+          ) : (
+            <div className="animate-in fade-in duration-500">
+              {renderTabelaDiaria()}
             </div>
-          ) : null}
+          )}
         </div>
       )}
       {renderDetalhamentoModal()}
