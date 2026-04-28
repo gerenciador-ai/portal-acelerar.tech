@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Image from 'next/image';
+import * as XLSX from 'xlsx';
 
 const EMPRESAS = [
   { id: 'victec', nome: "Victec", logo: "/logo_victec.png" },
@@ -31,24 +32,42 @@ const LINHAS_DRE_MESTRAS = [
 
 const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
+// Converte valor string brasileiro (ex: "1.500,00") para float
+function parseBRL(valor) {
+  if (valor === null || valor === undefined || valor === '') return 0;
+  const str = String(valor).trim().replace(/\./g, '').replace(',', '.');
+  return parseFloat(str) || 0;
+}
+
+// Extrai o índice do mês (0-11) a partir de uma data no formato YYYY-MM-DD ou DDMMAAAA
+function extrairMesIdx(dataStr) {
+  const s = String(dataStr).trim();
+  // Formato YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss
+  if (/^\d{4}-\d{2}/.test(s)) {
+    return parseInt(s.substring(5, 7), 10) - 1;
+  }
+  // Formato DDMMAAAA (ex: 15012026)
+  if (/^\d{8}$/.test(s)) {
+    return parseInt(s.substring(2, 4), 10) - 1;
+  }
+  return -1;
+}
+
 function EmpresaTab({ nome, logo, isActive, onClick }) {
   const isVMC = nome === 'VMC Tech';
   const containerWidth = isVMC ? 'w-40' : 'w-28';
-
   return (
-    <button 
+    <button
       onClick={onClick}
       className={`relative flex items-center justify-center h-20 ${containerWidth} transition-all duration-200 border-b-2 ${
-        isActive 
-        ? 'border-acelerar-light-blue bg-white/5' 
-        : 'border-transparent hover:bg-white/5'
+        isActive ? 'border-acelerar-light-blue bg-white/5' : 'border-transparent hover:bg-white/5'
       }`}
     >
       {logo && (
         <div className="relative w-full h-full p-3">
-          <Image 
-            src={logo} 
-            alt={nome} 
+          <Image
+            src={logo}
+            alt={nome}
             fill
             className={`transition-opacity duration-200 object-contain p-2 ${isActive ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -69,6 +88,9 @@ export default function OrcamentoPage() {
   const [planoContas, setPlanoContas] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [grid, setGrid] = useState({});
+  const [importando, setImportando] = useState(false);
+  const [alertasImport, setAlertasImport] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchPlano = async () => {
@@ -76,7 +98,6 @@ export default function OrcamentoPage() {
         const res = await fetch('/api/financeiro/fpa/orcamento?mode=plano');
         const data = await res.json();
         setPlanoContas(data);
-        
         const initialGrid = {};
         data.forEach(cat => {
           const key = cat.codigo_9_digitos || cat.categoria_nibo;
@@ -109,6 +130,94 @@ export default function OrcamentoPage() {
     }));
   };
 
+  // ─── IMPORTAÇÃO DE XLSX ───────────────────────────────────────────────────
+  const handleImportarXLSX = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImportando(true);
+    setAlertasImport([]);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const workbook = XLSX.read(evt.target.result, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        // Monta índice do plano de contas para busca rápida
+        const planoIndex = {};
+        planoContas.forEach(cat => {
+          const key = cat.codigo_9_digitos || cat.categoria_nibo;
+          if (cat.codigo_9_digitos) planoIndex[cat.codigo_9_digitos.trim()] = key;
+          if (cat.categoria_nibo) planoIndex[cat.categoria_nibo.trim().toLowerCase()] = key;
+        });
+
+        const novoGrid = {};
+        // Inicializa grid com zeros para todas as categorias
+        planoContas.forEach(cat => {
+          const key = cat.codigo_9_digitos || cat.categoria_nibo;
+          novoGrid[key] = Array(12).fill(0);
+        });
+
+        const naoEncontradas = new Set();
+
+        rows.forEach((row, idx) => {
+          // Aceita variações de nome de coluna (case-insensitive)
+          const dataRaw = row['DATA DE COMPETÊNCIA'] || row['DATA DE COMPETENCIA'] || row['data'] || '';
+          const catRaw = String(row['CATEGORIA'] || row['categoria'] || '').trim();
+          const valorRaw = row['VALOR'] || row['valor'] || 0;
+
+          if (!dataRaw || !catRaw) return;
+
+          const mesIdx = extrairMesIdx(dataRaw);
+          if (mesIdx < 0 || mesIdx > 11) {
+            naoEncontradas.add(`Linha ${idx + 2}: data inválida "${dataRaw}"`);
+            return;
+          }
+
+          const valor = parseBRL(valorRaw);
+
+          // Tenta encontrar a chave: primeiro como código 9 dígitos, depois como nome
+          const chave =
+            planoIndex[catRaw] ||
+            planoIndex[catRaw.toLowerCase()] ||
+            null;
+
+          if (!chave) {
+            naoEncontradas.add(`Categoria não encontrada: "${catRaw}"`);
+            return;
+          }
+
+          // Acumula o valor no mês correto
+          if (!novoGrid[chave]) novoGrid[chave] = Array(12).fill(0);
+          novoGrid[chave][mesIdx] += valor;
+        });
+
+        // Mescla com grid existente (substitui apenas o que veio no arquivo)
+        setGrid(prev => {
+          const merged = { ...prev };
+          Object.keys(novoGrid).forEach(k => {
+            merged[k] = novoGrid[k];
+          });
+          return merged;
+        });
+
+        if (naoEncontradas.size > 0) {
+          setAlertasImport([...naoEncontradas]);
+        }
+
+      } catch (err) {
+        alert("Erro ao processar o arquivo: " + err.message);
+      } finally {
+        setImportando(false);
+        // Reseta o input para permitir reimportar o mesmo arquivo
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const categoriasPorGrupo = useMemo(() => {
     const map = {};
     LINHAS_DRE_MESTRAS.forEach(grupo => {
@@ -125,9 +234,7 @@ export default function OrcamentoPage() {
       categorias.forEach(cat => {
         const key = cat.codigo_9_digitos || cat.categoria_nibo;
         const valores = grid[key] || Array(12).fill(0);
-        valores.forEach((v, i) => {
-          totais[grupo][i] += v;
-        });
+        valores.forEach((v, i) => { totais[grupo][i] += v; });
       });
     });
     return totais;
@@ -137,7 +244,6 @@ export default function OrcamentoPage() {
     if (!empresaAtiva) return alert("Selecione uma empresa");
     if (!nomeVersao) return alert("Dê um nome para esta versão do orçamento");
     setLoading(true);
-    
     try {
       const res = await fetch('/api/financeiro/fpa/orcamento', {
         method: 'POST',
@@ -150,7 +256,6 @@ export default function OrcamentoPage() {
           dados: grid
         })
       });
-      
       if (res.ok) {
         alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
       } else {
@@ -168,6 +273,7 @@ export default function OrcamentoPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Seleção de Empresa */}
       <div className="flex items-center bg-black/20 rounded-xl border border-white/10 overflow-x-auto no-scrollbar">
         {EMPRESAS.map((emp) => (
           <EmpresaTab
@@ -180,6 +286,7 @@ export default function OrcamentoPage() {
         ))}
       </div>
 
+      {/* Barra de Controles */}
       <div className="flex flex-wrap gap-4 items-center bg-black/20 p-4 rounded-xl border border-white/10 shadow-xl">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Ano</label>
@@ -196,15 +303,38 @@ export default function OrcamentoPage() {
         </div>
         <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
           <label className="text-[10px] text-white/40 uppercase font-bold">Nome da Versão</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Ex: Planejamento Inicial 2026"
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-acelerar-light-blue transition-all"
             value={nomeVersao}
             onChange={(e) => setNomeVersao(e.target.value)}
           />
         </div>
-        <button 
+
+        {/* Botão Importar XLSX */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] text-white/40 uppercase font-bold">Importar Dados</label>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importando || planoContas.length === 0}
+            className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            {importando ? 'PROCESSANDO...' : 'IMPORTAR XLSX'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleImportarXLSX}
+          />
+        </div>
+
+        <button
           onClick={handleSalvar}
           disabled={loading || !empresaAtiva}
           className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-8 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 mt-4 sm:mt-0"
@@ -212,6 +342,17 @@ export default function OrcamentoPage() {
           {loading ? 'SALVANDO...' : 'SALVAR ORÇAMENTO'}
         </button>
       </div>
+
+      {/* Alertas de Importação */}
+      {alertasImport.length > 0 && (
+        <div className="bg-yellow-900/30 border border-yellow-500/40 rounded-xl p-4">
+          <p className="text-yellow-400 text-xs font-bold mb-2">⚠️ Atenção — Itens não reconhecidos na importação ({alertasImport.length}):</p>
+          <ul className="text-yellow-300/70 text-[10px] space-y-1 max-h-32 overflow-y-auto">
+            {alertasImport.map((a, i) => <li key={i}>• {a}</li>)}
+          </ul>
+          <p className="text-yellow-300/50 text-[9px] mt-2 italic">Os demais itens foram importados normalmente. Revise os itens acima e ajuste manualmente se necessário.</p>
+        </div>
+      )}
 
       {!empresaAtiva ? (
         <div className="flex flex-col items-center justify-center py-32 text-white/20 bg-black/10 rounded-2xl border border-dashed border-white/10">
@@ -244,7 +385,7 @@ export default function OrcamentoPage() {
                         </td>
                       ))}
                     </tr>
-                    
+
                     {expandedGroups[grupo] && (categoriasPorGrupo[grupo] || []).map((cat) => {
                       const key = cat.codigo_9_digitos || cat.categoria_nibo;
                       return (
@@ -256,14 +397,14 @@ export default function OrcamentoPage() {
                           {MESES.map((m, idx) => (
                             <td key={m} className="py-1 px-1">
                               <div className="relative flex items-center group/cell">
-                                <input 
-                                  type="number" 
+                                <input
+                                  type="number"
                                   className="w-full bg-white/5 border border-white/10 rounded p-1.5 text-right text-white outline-none focus:border-acelerar-light-blue transition-all text-[10px]"
                                   value={grid[key]?.[idx] || 0}
                                   onChange={(e) => updateCell(key, idx, e.target.value)}
                                 />
                                 {idx < 11 && (
-                                  <button 
+                                  <button
                                     onClick={() => propagarValor(key, idx)}
                                     title="Propagar para os meses seguintes"
                                     className="absolute -right-1 opacity-0 group-hover/cell:opacity-100 bg-acelerar-light-blue text-white rounded-full p-1 shadow-lg hover:scale-110 transition-all z-20"
