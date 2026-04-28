@@ -32,6 +32,10 @@ const LINHAS_DRE_MESTRAS = [
 
 const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
+// Gera os próximos 5 anos a partir do ano atual, dinamicamente
+const anoAtualGlobal = new Date().getFullYear();
+const ANOS_DISPONIVEIS = [0, 1, 2, 3, 4].map(i => anoAtualGlobal + i);
+
 // Converte valor string brasileiro (ex: "1.500,00") para float
 function parseBRL(valor) {
   if (valor === null || valor === undefined || valor === '') return 0;
@@ -42,11 +46,9 @@ function parseBRL(valor) {
 // Extrai o índice do mês (0-11) a partir de uma data no formato YYYY-MM-DD ou DDMMAAAA
 function extrairMesIdx(dataStr) {
   const s = String(dataStr).trim();
-  // Formato YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss
   if (/^\d{4}-\d{2}/.test(s)) {
     return parseInt(s.substring(5, 7), 10) - 1;
   }
-  // Formato DDMMAAAA (ex: 15012026)
   if (/^\d{8}$/.test(s)) {
     return parseInt(s.substring(2, 4), 10) - 1;
   }
@@ -66,9 +68,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
       {logo && (
         <div className="relative w-full h-full p-3">
           <Image
-            src={logo}
-            alt={nome}
-            fill
+            src={logo} alt={nome} fill
             className={`transition-opacity duration-200 object-contain p-2 ${isActive ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             priority
@@ -81,7 +81,7 @@ function EmpresaTab({ nome, logo, isActive, onClick }) {
 
 export default function OrcamentoPage() {
   const [empresaAtiva, setEmpresaAtiva] = useState(null);
-  const [anoAtivo, setAnoAtivo] = useState(new Date().getFullYear());
+  const [anoAtivo, setAnoAtivo] = useState(anoAtualGlobal);
   const [tipoVersao, setTipoVersao] = useState('BUDGET');
   const [nomeVersao, setNomeVersao] = useState('');
   const [loading, setLoading] = useState(false);
@@ -90,8 +90,10 @@ export default function OrcamentoPage() {
   const [grid, setGrid] = useState({});
   const [importando, setImportando] = useState(false);
   const [alertasImport, setAlertasImport] = useState([]);
+  const [premissas, setPremissas] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Carrega o plano de contas uma única vez
   useEffect(() => {
     const fetchPlano = async () => {
       try {
@@ -110,6 +112,21 @@ export default function OrcamentoPage() {
     };
     fetchPlano();
   }, []);
+
+  // Carrega as premissas ao trocar empresa ou ano
+  useEffect(() => {
+    if (!empresaAtiva) return;
+    const fetchPremissas = async () => {
+      try {
+        const res = await fetch(`/api/financeiro/fpa/premissas?empresa=${empresaAtiva.id}&ano=${anoAtivo}`);
+        const data = await res.json();
+        setPremissas(data || null);
+      } catch {
+        setPremissas(null);
+      }
+    };
+    fetchPremissas();
+  }, [empresaAtiva, anoAtivo]);
 
   const toggleGroup = (group) => {
     setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
@@ -144,7 +161,6 @@ export default function OrcamentoPage() {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-        // Monta índice do plano de contas para busca rápida
         const planoIndex = {};
         planoContas.forEach(cat => {
           const key = cat.codigo_9_digitos || cat.categoria_nibo;
@@ -153,7 +169,6 @@ export default function OrcamentoPage() {
         });
 
         const novoGrid = {};
-        // Inicializa grid com zeros para todas as categorias
         planoContas.forEach(cat => {
           const key = cat.codigo_9_digitos || cat.categoria_nibo;
           novoGrid[key] = Array(12).fill(0);
@@ -162,7 +177,6 @@ export default function OrcamentoPage() {
         const naoEncontradas = new Set();
 
         rows.forEach((row, idx) => {
-          // Aceita variações de nome de coluna (case-insensitive)
           const dataRaw = row['DATA DE COMPETÊNCIA'] || row['DATA DE COMPETENCIA'] || row['data'] || '';
           const catRaw = String(row['CATEGORIA'] || row['categoria'] || '').trim();
           const valorRaw = row['VALOR'] || row['valor'] || 0;
@@ -176,41 +190,29 @@ export default function OrcamentoPage() {
           }
 
           const valor = parseBRL(valorRaw);
-
-          // Tenta encontrar a chave: primeiro como código 9 dígitos, depois como nome
-          const chave =
-            planoIndex[catRaw] ||
-            planoIndex[catRaw.toLowerCase()] ||
-            null;
+          const chave = planoIndex[catRaw] || planoIndex[catRaw.toLowerCase()] || null;
 
           if (!chave) {
             naoEncontradas.add(`Categoria não encontrada: "${catRaw}"`);
             return;
           }
 
-          // Acumula o valor no mês correto
           if (!novoGrid[chave]) novoGrid[chave] = Array(12).fill(0);
           novoGrid[chave][mesIdx] += valor;
         });
 
-        // Mescla com grid existente (substitui apenas o que veio no arquivo)
         setGrid(prev => {
           const merged = { ...prev };
-          Object.keys(novoGrid).forEach(k => {
-            merged[k] = novoGrid[k];
-          });
+          Object.keys(novoGrid).forEach(k => { merged[k] = novoGrid[k]; });
           return merged;
         });
 
-        if (naoEncontradas.size > 0) {
-          setAlertasImport([...naoEncontradas]);
-        }
+        if (naoEncontradas.size > 0) setAlertasImport([...naoEncontradas]);
 
       } catch (err) {
         alert("Erro ao processar o arquivo: " + err.message);
       } finally {
         setImportando(false);
-        // Reseta o input para permitir reimportar o mesmo arquivo
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
@@ -240,6 +242,37 @@ export default function OrcamentoPage() {
     return totais;
   }, [grid, categoriasPorGrupo]);
 
+  // ─── LINHAS CALCULADAS PELAS PREMISSAS ───────────────────────────────────
+
+  // (-) IR / CSLL Projetado = Receita Bruta Operacional × Imposto Médio (%)
+  // Respeitando o mês de início definido na premissa
+  const linhaIRCSLL = useMemo(() => {
+    if (!premissas) return Array(12).fill(0);
+    const pct = parseFloat(premissas.imposto_medio_percentual) / 100 || 0;
+    const mesInicio = parseInt(premissas.imposto_medio_mes_inicio) || 1;
+    return (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0)).map((v, i) => {
+      return i >= mesInicio - 1 ? v * pct : 0;
+    });
+  }, [premissas, totaisGrupo]);
+
+  // PROJEÇÃO DE CRESCIMENTO
+  // Se PERCENTUAL: soma Receitas Operacionais do mês × %
+  // Se VALOR_FIXO: valor fixo a partir do mês de início
+  const linhaCrescimento = useMemo(() => {
+    if (!premissas) return Array(12).fill(0);
+    const tipo = premissas.crescimento_tipo || 'PERCENTUAL';
+    const valor = parseFloat(premissas.crescimento_valor) || 0;
+    const mesInicio = parseInt(premissas.crescimento_mes_inicio) || 1;
+    return Array(12).fill(0).map((_, i) => {
+      if (i < mesInicio - 1) return 0;
+      if (tipo === 'VALOR_FIXO') return valor;
+      const receitaBruta = (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0))[i];
+      return receitaBruta * (valor / 100);
+    });
+  }, [premissas, totaisGrupo]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleSalvar = async () => {
     if (!empresaAtiva) return alert("Selecione uma empresa");
     if (!nomeVersao) return alert("Dê um nome para esta versão do orçamento");
@@ -268,21 +301,15 @@ export default function OrcamentoPage() {
     }
   };
 
-  const selectStyle = "bg-acelerar-dark-blue border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-acelerar-light-blue appearance-none cursor-pointer";
-  const optionStyle = "bg-acelerar-dark-blue text-white";
+  const selectStyle = "bg-[#0f1e3a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-acelerar-light-blue cursor-pointer";
 
   return (
     <div className="flex flex-col gap-6">
       {/* Seleção de Empresa */}
       <div className="flex items-center bg-black/20 rounded-xl border border-white/10 overflow-x-auto no-scrollbar">
         {EMPRESAS.map((emp) => (
-          <EmpresaTab
-            key={emp.id}
-            nome={emp.nome}
-            logo={emp.logo}
-            isActive={empresaAtiva?.id === emp.id}
-            onClick={() => setEmpresaAtiva(emp)}
-          />
+          <EmpresaTab key={emp.id} nome={emp.nome} logo={emp.logo}
+            isActive={empresaAtiva?.id === emp.id} onClick={() => setEmpresaAtiva(emp)} />
         ))}
       </div>
 
@@ -290,15 +317,15 @@ export default function OrcamentoPage() {
       <div className="flex flex-wrap gap-4 items-center bg-black/20 p-4 rounded-xl border border-white/10 shadow-xl">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Ano</label>
-          <select value={anoAtivo} onChange={(e) => setAnoAtivo(e.target.value)} className={selectStyle}>
-            {[2024, 2025, 2026].map(ano => <option key={ano} value={ano} className={optionStyle}>{ano}</option>)}
+          <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className={selectStyle}>
+            {ANOS_DISPONIVEIS.map(ano => <option key={ano} value={ano}>{ano}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Tipo</label>
           <select value={tipoVersao} onChange={(e) => setTipoVersao(e.target.value)} className={selectStyle}>
-            <option value="BUDGET" className={optionStyle}>BUDGET (Orçamento)</option>
-            <option value="FORECAST" className={optionStyle}>FORECAST (Revisão)</option>
+            <option value="BUDGET">BUDGET (Orçamento)</option>
+            <option value="FORECAST">FORECAST (Revisão)</option>
           </select>
         </div>
         <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
@@ -325,13 +352,7 @@ export default function OrcamentoPage() {
             </svg>
             {importando ? 'PROCESSANDO...' : 'IMPORTAR XLSX'}
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={handleImportarXLSX}
-          />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportarXLSX} />
         </div>
 
         <button
@@ -354,9 +375,20 @@ export default function OrcamentoPage() {
         </div>
       )}
 
+      {/* Aviso de premissas não configuradas */}
+      {empresaAtiva && !premissas && (
+        <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-3">
+          <p className="text-blue-300 text-xs">
+            ℹ️ Nenhuma premissa configurada para {empresaAtiva.nome} em {anoAtivo}. As linhas calculadas (IR/CSLL e Crescimento) aparecerão zeradas. Configure as premissas na tela de <strong>Premissas</strong>.
+          </p>
+        </div>
+      )}
+
       {!empresaAtiva ? (
         <div className="flex flex-col items-center justify-center py-32 text-white/20 bg-black/10 rounded-2xl border border-dashed border-white/10">
-          <svg className="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011-1v5m-4 0h4" /></svg>
+          <svg className="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
           <p className="text-xl font-medium">Selecione uma empresa acima para iniciar o orçamento</p>
         </div>
       ) : (
@@ -372,6 +404,7 @@ export default function OrcamentoPage() {
                 </tr>
               </thead>
               <tbody>
+                {/* Linhas Mestras com Drill-down */}
                 {LINHAS_DRE_MESTRAS.map((grupo) => (
                   <React.Fragment key={grupo}>
                     <tr className="bg-white/5 border-b border-white/10 cursor-pointer hover:bg-white/10 transition-colors" onClick={() => toggleGroup(grupo)}>
@@ -422,11 +455,48 @@ export default function OrcamentoPage() {
                     })}
                   </React.Fragment>
                 ))}
+
+                {/* ─── LINHA CALCULADA: (-) IR / CSLL PROJETADO ─── */}
+                <tr className="bg-red-900/20 border-b border-red-500/20">
+                  <td className="py-3 px-4 font-bold text-red-300 sticky left-0 bg-acelerar-dark-blue z-10 shadow-r flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>
+                    (-) IR / CSLL PROJETADO
+                    <span className="text-[9px] text-white/20 font-normal ml-1">
+                      {premissas ? `${premissas.imposto_medio_percentual}% s/ Rec. Bruta` : 'sem premissa'}
+                    </span>
+                  </td>
+                  {MESES.map((m, idx) => (
+                    <td key={m} className="py-3 px-2 text-right font-bold text-red-300/80">
+                      {linhaIRCSLL[idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                  ))}
+                </tr>
+
+                {/* ─── LINHA CALCULADA: PROJEÇÃO DE CRESCIMENTO ─── */}
+                <tr className="bg-green-900/20 border-b border-green-500/20">
+                  <td className="py-3 px-4 font-bold text-green-300 sticky left-0 bg-acelerar-dark-blue z-10 shadow-r flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>
+                    PROJEÇÃO DE CRESCIMENTO
+                    <span className="text-[9px] text-white/20 font-normal ml-1">
+                      {premissas
+                        ? premissas.crescimento_tipo === 'PERCENTUAL'
+                          ? `${premissas.crescimento_valor}% s/ Rec. Op.`
+                          : `Valor fixo R$ ${parseFloat(premissas.crescimento_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : 'sem premissa'}
+                    </span>
+                  </td>
+                  {MESES.map((m, idx) => (
+                    <td key={m} className="py-3 px-2 text-right font-bold text-green-300/80">
+                      {linhaCrescimento[idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                  ))}
+                </tr>
+
               </tbody>
             </table>
           </div>
           <div className="bg-white/5 p-4 text-white/30 text-[10px] italic">
-            * Expanda as linhas mestras para detalhar o orçamento por categoria. Os valores base informados serão ajustados pelas premissas ao salvar.
+            * Expanda as linhas mestras para detalhar o orçamento por categoria. As linhas em vermelho e verde são calculadas automaticamente pelas premissas configuradas.
           </div>
         </div>
       )}
