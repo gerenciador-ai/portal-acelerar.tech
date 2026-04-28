@@ -244,19 +244,8 @@ export default function OrcamentoPage() {
 
   // ─── LINHAS CALCULADAS PELAS PREMISSAS ───────────────────────────────────
 
-  // (-) IR / CSLL Projetado = Receita Bruta Operacional × Imposto Médio (%)
-  // Respeitando o mês de início definido na premissa
-  const linhaIRCSLL = useMemo(() => {
-    if (!premissas) return Array(12).fill(0);
-    const pct = parseFloat(premissas.imposto_medio_percentual) / 100 || 0;
-    const mesInicio = parseInt(premissas.imposto_medio_mes_inicio) || 1;
-    return (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0)).map((v, i) => {
-      return i >= mesInicio - 1 ? v * pct : 0;
-    });
-  }, [premissas, totaisGrupo]);
-
-  // PROJEÇÃO DE CRESCIMENTO
-  // Se PERCENTUAL: soma Receitas Operacionais do mês × %
+  // PROJEÇÃO DE CRESCIMENTO — calculada primeiro pois compõe a Receita Bruta Total
+  // Se PERCENTUAL: Receitas Operacionais cadastradas × %
   // Se VALOR_FIXO: valor fixo a partir do mês de início
   const linhaCrescimento = useMemo(() => {
     if (!premissas) return Array(12).fill(0);
@@ -266,10 +255,25 @@ export default function OrcamentoPage() {
     return Array(12).fill(0).map((_, i) => {
       if (i < mesInicio - 1) return 0;
       if (tipo === 'VALOR_FIXO') return valor;
-      const receitaBruta = (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0))[i];
-      return receitaBruta * (valor / 100);
+      const receitaCadastrada = (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0))[i];
+      return receitaCadastrada * (valor / 100);
     });
   }, [premissas, totaisGrupo]);
+
+  // RECEITA BRUTA TOTAL = Receitas Operacionais cadastradas + Projeção de Crescimento
+  // Esta é a base de cálculo correta para impostos e deduções
+  const receitaBrutaTotal = useMemo(() => {
+    return (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0)).map((v, i) => v + linhaCrescimento[i]);
+  }, [totaisGrupo, linhaCrescimento]);
+
+  // (-) IR / CSLL Projetado = Receita Bruta Total × Imposto Médio (%)
+  // Base: Receitas Operacionais + Crescimento Projetado, respeitando mês de início
+  const linhaIRCSLL = useMemo(() => {
+    if (!premissas) return Array(12).fill(0);
+    const pct = parseFloat(premissas.imposto_medio_percentual) / 100 || 0;
+    const mesInicio = parseInt(premissas.imposto_medio_mes_inicio) || 1;
+    return receitaBrutaTotal.map((v, i) => i >= mesInicio - 1 ? v * pct : 0);
+  }, [premissas, receitaBrutaTotal]);
 
   // ─────────────────────────────────────────────────────────────────────────
 
