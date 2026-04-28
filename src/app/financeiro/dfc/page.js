@@ -404,19 +404,19 @@ function DFCContent() {
     return matrizGerencial;
   }, [dadosComIntercompanyCruzado]);
 
-  // Saldo inicial do mês diário: calculado em cascata usando o useMemo gerencial já disponível
-  // Isso garante que o saldo use os mesmos dados (com Intercompany) exibidos na tabela mensal
+  // Saldo inicial do mês diário: calculado em cascata usando exclusivamente o DFC Real (dados.matriz)
+  // Sem qualquer ajuste de Intercompany — reflete o saldo bancário real
   const saldoInicialMes = useMemo(() => {
-    if (!dados || !gerarDadosGerenciais) return 0;
+    if (!dados || !dados.matriz) return 0;
     const saldoBase = dados.saldoInicial || 0;
-    const linhaResultado = gerarDadosGerenciais.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
+    const linhaResultado = dados.matriz.find(l => l.key === '(=) SALDO LÍQUIDO DO PERÍODO');
     if (!linhaResultado) return saldoBase;
     let saldo = saldoBase;
     for (let m = 0; m < mesDiario - 1; m++) {
       saldo += (linhaResultado.valores[m] || 0);
     }
     return saldo;
-  }, [dados, gerarDadosGerenciais, mesDiario]);
+  }, [dados, mesDiario]);
 
   const renderTabelaMensal = (matrizParaRenderizar, titulo, saldoInicialBase) => {
     if (!matrizParaRenderizar || !dados) return null;
