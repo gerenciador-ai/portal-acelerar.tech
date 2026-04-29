@@ -38,7 +38,7 @@ const premissasVazias = () => ({
   iss_percentual: 0, iss_mes_inicio: 1,
   ir_retido_percentual: 0, ir_retido_mes_inicio: 1,
   imposto_medio_percentual: 0, imposto_medio_mes_inicio: 1,
-  crescimento_tipo: 'PERCENTUAL', crescimento_valor: 0, crescimento_mes_inicio: 1,
+  crescimento_tipo: 'PERCENTUAL', crescimento_modalidade: 'SOBRE_RECEITA', crescimento_valor: 0, crescimento_mes_inicio: 1,
   dissidio_pessoal_comercial_percentual: 0, dissidio_pessoal_comercial_mes_inicio: 1,
   dissidio_pessoal_operacional_percentual: 0, dissidio_pessoal_operacional_mes_inicio: 1,
   dissidio_pessoal_administrativo_percentual: 0, dissidio_pessoal_administrativo_mes_inicio: 1,
@@ -275,7 +275,15 @@ export default function PremissasPage() {
               <span className="w-1 h-5 bg-green-400 rounded-full"></span>
               Crescimento Projetado
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div className="flex flex-col gap-2">
+                <label className={labelCls}>Modalidade</label>
+                <select className={selectCls} value={premissas.crescimento_modalidade || 'SOBRE_RECEITA'}
+                  onChange={e => set('crescimento_modalidade', e.target.value)}>
+                  <option value="SOBRE_RECEITA">Sobre a Receita</option>
+                  <option value="ACUMULATIVO">Acumulativo</option>
+                </select>
+              </div>
               <div className="flex flex-col gap-2">
                 <label className={labelCls}>Tipo</label>
                 <select className={selectCls} value={premissas.crescimento_tipo}
@@ -284,6 +292,8 @@ export default function PremissasPage() {
                   <option value="VALOR_FIXO">Valor Fixo (R$)</option>
                 </select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <label className={labelCls}>
                   {premissas.crescimento_tipo === 'PERCENTUAL' ? 'Percentual (%)' : 'Valor Fixo (R$)'}
@@ -297,10 +307,14 @@ export default function PremissasPage() {
                 <MesSelect campo="crescimento_mes_inicio" valor={premissas.crescimento_mes_inicio} />
               </div>
             </div>
-            <p className="text-[10px] text-white/25 italic">
-              {premissas.crescimento_tipo === 'PERCENTUAL'
-                ? 'Será aplicado sobre o total de Receitas Operacionais do mês para projetar o crescimento incremental.'
-                : 'Valor fixo que será adicionado mensalmente às Receitas Operacionais a partir do mês de início.'}
+            <p className="text-[10px] text-white/25 italic mt-2">
+              {premissas.crescimento_modalidade === 'ACUMULATIVO'
+                ? (premissas.crescimento_tipo === 'PERCENTUAL'
+                    ? 'Acumulativo %: cada mês aplica o percentual sobre o resultado do mês anterior (juros compostos). Ex: Base 100k + 5% → Jan 105k, Fev 110,25k...'
+                    : 'Acumulativo Valor: soma o valor fixo de forma cumulativa a cada mês. Ex: Base 70k + R$10k → Jan 80k, Fev 90k, Mar 100k...')
+                : (premissas.crescimento_tipo === 'PERCENTUAL'
+                    ? 'Sobre a Receita %: aplica o percentual diretamente sobre o valor já carregado naquele mês específico do orçamento.'
+                    : 'Sobre a Receita Valor: adiciona o valor fixo ao total de receitas de cada mês, sem acumulação.')}
             </p>
           </div>
 
