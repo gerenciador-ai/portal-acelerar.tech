@@ -9,8 +9,9 @@ const supabase = createClient(
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { empresa, ano, tipo, nome, dados, premissas, headcounts } = body;
+    const { empresa, ano, tipo, nome, dados } = body;
 
+    // 1. Cria a versão do orçamento
     const { data: versao, error: vError } = await supabase
       .from("fpa_versoes")
       .insert([{
@@ -26,43 +27,27 @@ export async function POST(request) {
     if (vError) throw vError;
     const versaoId = versao.id;
 
-    // ✅ CORREÇÃO: Adicionar descricao_orcamento à query
-    const { data: plano } = await supabase.from("plano_contas_dre").select("codigo_9_digitos, categoria_nibo, grupo_dre, descricao_orcamento");
+    // 2. Carrega o plano de contas para mapear grupo_dre
+    const { data: plano, error: pError } = await supabase
+      .from("plano_contas_dre")
+      .select("codigo_9_digitos, categoria_nibo, grupo_dre");
+    if (pError) throw pError;
+
     const planoMap = {};
     plano.forEach(p => {
       const key = p.codigo_9_digitos || p.categoria_nibo;
       planoMap[key] = p.grupo_dre;
     });
 
-    if (premissas && premissas.length > 0) {
-      const premissasParaSalvar = premissas.map(p => ({
-        versao_id: versaoId,
-        tipo_premissa: p.tipo,
-        grupo_dre: p.grupo,
-        percentual: p.percentual,
-        mes_inicio: p.mes_inicio
-      }));
-      await supabase.from("fpa_premissas").insert(premissasParaSalvar);
-    }
-
+    // 3. Monta os registros de orçamento linha a linha
     const registrosParaSalvar = [];
     const chaves = Object.keys(dados);
 
     for (let mes = 1; mes <= 12; mes++) {
       for (const key of chaves) {
         const grupo = planoMap[key] || "OUTROS";
-        let valorBase = parseFloat(dados[key][mes - 1] || 0);
+        const valorBase = parseFloat(dados[key][mes - 1] || 0);
         if (valorBase === 0) continue;
-
-        let valorFinal = valorBase;
-
-        const premissaAtiva = premissas?.find(p => 
-          p.grupo === grupo && mes >= p.mes_inicio && 
-          ['INFLACAO', 'DISSIDIO', 'REAJUSTE_EXPONTANEO'].includes(p.tipo_premissa)
-        );
-        if (premissaAtiva) {
-          valorFinal = valorFinal * (1 + (parseFloat(premissaAtiva.percentual) / 100));
-        }
 
         registrosParaSalvar.push({
           versao_id: versaoId,
@@ -72,11 +57,12 @@ export async function POST(request) {
           categoria_nibo: key.length !== 9 || !/^\d+$/.test(key) ? key : null,
           mes: mes,
           valor_base: valorBase,
-          valor_projetado: valorFinal
+          valor_projetado: valorBase
         });
       }
     }
 
+    // 4. Salva em lotes de 500 registros
     for (let i = 0; i < registrosParaSalvar.length; i += 500) {
       const batch = registrosParaSalvar.slice(i, i + 500);
       const { error: dError } = await supabase.from("fpa_orcamento_base").insert(batch);
@@ -87,7 +73,7 @@ export async function POST(request) {
 
   } catch (error) {
     console.error("Erro na API de Orçamento:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Erro interno ao salvar orçamento" }, { status: 500 });
   }
 }
 
@@ -97,7 +83,6 @@ export async function GET(request) {
     const mode = searchParams.get("mode");
 
     if (mode === "plano") {
-      // ✅ CORREÇÃO: Adicionar descricao_orcamento à query
       const { data, error } = await supabase
         .from("plano_contas_dre")
         .select("*")
@@ -111,7 +96,7 @@ export async function GET(request) {
     const ano = searchParams.get("ano");
     const { data, error } = await supabase
       .from("fpa_versoes")
-      .select(`*, fpa_orcamento_base (*), fpa_premissas (*)`)
+      .select(`*, fpa_orcamento_base (*)`)
       .eq("empresa_nome", empresa)
       .eq("ano", ano)
       .order("created_at", { ascending: false });
