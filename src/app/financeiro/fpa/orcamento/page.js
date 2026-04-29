@@ -101,7 +101,7 @@ export default function OrcamentoPage() {
   const [empresaAtiva, setEmpresaAtiva] = useState(null);
   const [anoAtivo, setAnoAtivo] = useState(anoAtualGlobal);
   const [tipoVersao, setTipoVersao] = useState('BUDGET');
-  const [nomeVersao, setNomeVersao] = useState('');
+  const [sufixoVersao, setSufixoVersao] = useState('');
   const [loading, setLoading] = useState(false);
   const [planoContas, setPlanoContas] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -303,25 +303,31 @@ export default function OrcamentoPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Monta o preview do nome completo da versão (igual ao que a API vai gerar)
+  const previewNomeVersao = empresaAtiva && sufixoVersao.trim()
+    ? `${empresaAtiva.id.toUpperCase()}_${anoAtivo}_${tipoVersao}_${sufixoVersao.trim().toUpperCase().replace(/\s+/g, '_')}`
+    : null;
+
   const handleSalvar = async () => {
     if (!empresaAtiva) return alert("Selecione uma empresa");
-    if (!nomeVersao.trim()) return alert("Dê um nome para esta versão do orçamento");
+    if (!sufixoVersao.trim()) return alert("Informe o sufixo da versão (ex: V1)");
     setLoading(true);
     try {
       const res = await fetch('/api/financeiro/fpa/orcamento', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          empresa: empresaAtiva.nome,
+          empresa: empresaAtiva.id,
           ano: anoAtivo,
           tipo: tipoVersao,
-          nome: nomeVersao.trim(),
+          sufixoVersao: sufixoVersao.trim(),
           dados: grid
         })
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Erro ao salvar");
-      alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
+      alert(`Orçamento "${json.nomeVersao}" salvo com sucesso para ${empresaAtiva.nome}!`);
+      setSufixoVersao('');
     } catch (error) {
       alert("Erro ao salvar orçamento: " + error.message);
     } finally {
@@ -357,14 +363,19 @@ export default function OrcamentoPage() {
           </select>
         </div>
         <div className="flex flex-col gap-1" style={{width: '280px'}}>
-          <label className="text-[10px] text-white/40 uppercase font-bold">Nome da Versão</label>
+          <label className="text-[10px] text-white/40 uppercase font-bold">Sufixo da Versão</label>
           <input
             type="text"
-            placeholder="Ex: Planejamento Inicial 2026"
+            placeholder="Ex: V1"
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-acelerar-light-blue transition-all"
-            value={nomeVersao}
-            onChange={(e) => setNomeVersao(e.target.value)}
+            value={sufixoVersao}
+            onChange={(e) => setSufixoVersao(e.target.value)}
           />
+          {previewNomeVersao && (
+            <span className="text-[9px] text-white/30 mt-0.5 truncate" title={previewNomeVersao}>
+              Nome: <span className="text-acelerar-light-blue/60">{previewNomeVersao}</span>
+            </span>
+          )}
         </div>
 
         {/* Spacer */}
