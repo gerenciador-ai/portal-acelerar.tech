@@ -165,38 +165,88 @@ export default function DREPage() {
     });
 
     // 2. Aplica premissas (crescimento e IR/CSLL)
+    // Drill-down de projeção de crescimento (linha separada no detalhe de Receitas Operacionais)
+    if (empresaAtiva.id !== 'consolidado') {
+      drillCategoria['receitas_operacionais']['__projecao__'] = {
+        descricao: 'Projeção de Crescimento',
+        valores: zeros12()
+      };
+    }
+
     empresasList.forEach(emp => {
       const premissa = dreData.premissas.find(p => p.empresa === emp.id);
       if (!premissa) return;
 
+      const mesInicioCresc = parseInt(premissa.crescimento_mes_inicio) || 1;
+      const tipoCresc      = premissa.crescimento_tipo || 'PERCENTUAL';
+      const modalidade     = premissa.crescimento_modalidade || 'SOBRE_RECEITA';
+      const valorCresc     = parseFloat(premissa.crescimento_valor) || 0;
+
+      // Valor base de receita antes de qualquer crescimento (snapshot para acumulativo)
+      const baseReceita = [...res['receitas_operacionais'].porEmpresa[emp.id]];
+
       for (let i = 0; i < 12; i++) {
-        // Crescimento projetado — soma em receitas_operacionais (base da receita bruta)
-        const mesInicioCresc = parseInt(premissa.crescimento_mes_inicio) || 1;
+        // ── Crescimento Projetado ──────────────────────────────────────────────
         if (i >= mesInicioCresc - 1) {
           let cresc = 0;
-          if (premissa.crescimento_tipo === 'VALOR_FIXO') {
-            cresc = parseFloat(premissa.crescimento_valor) || 0;
+          const mesesDecorridos = i - (mesInicioCresc - 1) + 1; // 1 no primeiro mês ativo
+
+          if (modalidade === 'ACUMULATIVO') {
+            // Acumulativo: o crescimento é multiplicado pelo número de meses decorridos
+            if (tipoCresc === 'VALOR_FIXO') {
+              // Jan = base + 1x, Fev = base + 2x, Mar = base + 3x...
+              cresc = valorCresc * mesesDecorridos;
+            } else {
+              // Juros compostos: aplica % sobre o resultado acumulado do mês anterior
+              // Para o primeiro mês ativo: base * (1 + %)^1 - base
+              cresc = baseReceita[i] * (Math.pow(1 + valorCresc / 100, mesesDecorridos) - 1);
+            }
           } else {
-            cresc = res['receitas_operacionais'].porEmpresa[emp.id][i] * ((parseFloat(premissa.crescimento_valor) || 0) / 100);
+            // Sobre a Receita: aplica sobre o valor do mês específico (comportamento original)
+            if (tipoCresc === 'VALOR_FIXO') {
+              cresc = valorCresc;
+            } else {
+              cresc = res['receitas_operacionais'].porEmpresa[emp.id][i] * (valorCresc / 100);
+            }
           }
+
           res['receitas_operacionais'].porEmpresa[emp.id][i] += cresc;
           res['receitas_operacionais'].total[i] += cresc;
+
+          // Registra no drill-down de projeção
+          if (empresaAtiva.id !== 'consolidado') {
+            drillCategoria['receitas_operacionais']['__projecao__'].valores[i] += cresc;
+          }
         }
 
-        // IR/CSLL projetado
+        // ── IR/CSLL projetado (calculado após crescimento já somado) ──────────
+        // Será recalculado no passo 3 usando receita_bruta final
+      }
+    });
+
+    // IR/CSLL calculado após crescimento estar consolidado em receitas_operacionais
+    // (calculado no laço de resultados intermediários abaixo, pois depende de receita_bruta final)
+
+    // 3. Calcula resultados intermediários (crescimento já está em receitas_operacionais)
+    for (let i = 0; i < 12; i++) {
+      // Receita Bruta = Receitas Operacionais (já inclui crescimento projetado)
+      res['receita_bruta'].total[i] = res['receitas_operacionais'].total[i];
+      empresasList.forEach(emp => {
+        res['receita_bruta'].porEmpresa[emp.id][i] = res['receitas_operacionais'].porEmpresa[emp.id][i];
+      });
+
+      // IR/CSLL calculado sobre receita_bruta final (após crescimento)
+      empresasList.forEach(emp => {
+        const premissa = dreData.premissas.find(p => p.empresa === emp.id);
+        if (!premissa) return;
         const mesInicioIR = parseInt(premissa.imposto_medio_mes_inicio) || 1;
         if (i >= mesInicioIR - 1) {
           const imp = res['receita_bruta'].porEmpresa[emp.id][i] * ((parseFloat(premissa.imposto_medio_percentual) || 0) / 100);
           res['ir_csll'].porEmpresa[emp.id][i] += imp;
           res['ir_csll'].total[i] += imp;
         }
-      }
-    });
+      });
 
-    // 3. Calcula resultados intermediários
-    for (let i = 0; i < 12; i++) {
-      // Receita Bruta = soma das Receitas Operacionais + crescimento (já aplicado acima nas premissas)
-      res['receita_bruta'].total[i]       = res['receitas_operacionais'].total[i];
       res['receita_liquida'].total[i]     = res['receita_bruta'].total[i] - res['deducoes'].total[i];
       res['margem_contribuicao'].total[i] = res['receita_liquida'].total[i] - res['custo_venda'].total[i];
       res['lucro_bruto'].total[i]         = res['margem_contribuicao'].total[i] - res['custos_operacionais'].total[i];
@@ -206,7 +256,6 @@ export default function DREPage() {
 
       empresasList.forEach(emp => {
         const e = emp.id;
-        res['receita_bruta'].porEmpresa[e][i]       = res['receitas_operacionais'].porEmpresa[e][i];
         res['receita_liquida'].porEmpresa[e][i]     = res['receita_bruta'].porEmpresa[e][i] - res['deducoes'].porEmpresa[e][i];
         res['margem_contribuicao'].porEmpresa[e][i] = res['receita_liquida'].porEmpresa[e][i] - res['custo_venda'].porEmpresa[e][i];
         res['lucro_bruto'].porEmpresa[e][i]         = res['margem_contribuicao'].porEmpresa[e][i] - res['custos_operacionais'].porEmpresa[e][i];
