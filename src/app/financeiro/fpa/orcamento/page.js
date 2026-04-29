@@ -36,10 +36,21 @@ const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "O
 const anoAtualGlobal = new Date().getFullYear();
 const ANOS_DISPONIVEIS = [0, 1, 2, 3, 4].map(i => anoAtualGlobal + i);
 
+// ─── FORMATAÇÃO NUMÉRICA CENTRALIZADA ────────────────────────────────────────
+// Padrão único para todo o módulo: milhar com ponto, decimal com vírgula, 2 casas
+const formatarMoeda = (valor) => {
+  const num = parseFloat(valor) || 0;
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: true
+  }).format(num);
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Converte valor para float — trata formatos BR (vírgula decimal) e EN (ponto decimal)
 function parseBRL(valor) {
   if (valor === null || valor === undefined || valor === '') return 0;
-  // Se já é número, retorna diretamente
   if (typeof valor === 'number') return valor;
   const str = String(valor).trim();
   // Formato BR: tem vírgula como separador decimal (ex: "4865,70" ou "4.865,70")
@@ -98,6 +109,8 @@ export default function OrcamentoPage() {
   const [importando, setImportando] = useState(false);
   const [alertasImport, setAlertasImport] = useState([]);
   const [premissas, setPremissas] = useState(null);
+  // Controla se a célula está em modo de edição (mostra número cru) ou exibição (mostra formatado)
+  const [celulaAtiva, setCelulaAtiva] = useState(null); // "key-mesIdx"
   const fileInputRef = useRef(null);
 
   const handleLimparGrid = () => {
@@ -262,8 +275,6 @@ export default function OrcamentoPage() {
   // ─── LINHAS CALCULADAS PELAS PREMISSAS ───────────────────────────────────
 
   // PROJEÇÃO DE CRESCIMENTO — calculada primeiro pois compõe a Receita Bruta Total
-  // Se PERCENTUAL: Receitas Operacionais cadastradas × %
-  // Se VALOR_FIXO: valor fixo a partir do mês de início
   const linhaCrescimento = useMemo(() => {
     if (!premissas) return Array(12).fill(0);
     const tipo = premissas.crescimento_tipo || 'PERCENTUAL';
@@ -278,13 +289,11 @@ export default function OrcamentoPage() {
   }, [premissas, totaisGrupo]);
 
   // RECEITA BRUTA TOTAL = Receitas Operacionais cadastradas + Projeção de Crescimento
-  // Esta é a base de cálculo correta para impostos e deduções
   const receitaBrutaTotal = useMemo(() => {
     return (totaisGrupo["RECEITAS OPERACIONAIS"] || Array(12).fill(0)).map((v, i) => v + linhaCrescimento[i]);
   }, [totaisGrupo, linhaCrescimento]);
 
-  // (-) IR / CSLL Projetado = Receita Bruta Total × Imposto Médio (%)
-  // Base: Receitas Operacionais + Crescimento Projetado, respeitando mês de início
+  // IR/CSLL PROJETADO = Receita Bruta Total × Imposto Médio (%)
   const linhaIRCSLL = useMemo(() => {
     if (!premissas) return Array(12).fill(0);
     const pct = parseFloat(premissas.imposto_medio_percentual) / 100 || 0;
@@ -296,7 +305,7 @@ export default function OrcamentoPage() {
 
   const handleSalvar = async () => {
     if (!empresaAtiva) return alert("Selecione uma empresa");
-    if (!nomeVersao) return alert("Dê um nome para esta versão do orçamento");
+    if (!nomeVersao.trim()) return alert("Dê um nome para esta versão do orçamento");
     setLoading(true);
     try {
       const res = await fetch('/api/financeiro/fpa/orcamento', {
@@ -306,15 +315,13 @@ export default function OrcamentoPage() {
           empresa: empresaAtiva.nome,
           ano: anoAtivo,
           tipo: tipoVersao,
-          nome: nomeVersao,
+          nome: nomeVersao.trim(),
           dados: grid
         })
       });
-      if (res.ok) {
-        alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
-      } else {
-        throw new Error("Erro ao salvar");
-      }
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao salvar");
+      alert("Orçamento salvo com sucesso para " + empresaAtiva.nome);
     } catch (error) {
       alert("Erro ao salvar orçamento: " + error.message);
     } finally {
@@ -437,7 +444,7 @@ export default function OrcamentoPage() {
                 <tr className="bg-white/5 text-white/40 border-b border-white/10">
                   <th className="py-4 px-4 font-bold uppercase sticky left-0 bg-acelerar-dark-blue z-10 min-w-[300px] shadow-r text-xs">Estrutura DRE / Orçamento</th>
                   {MESES.map(m => (
-                    <th key={m} className="py-4 px-2 font-bold text-center min-w-[100px]">{m}</th>
+                    <th key={m} className="py-4 px-2 font-bold text-center min-w-[110px]">{m}</th>
                   ))}
                 </tr>
               </thead>
@@ -445,18 +452,20 @@ export default function OrcamentoPage() {
                 {/* Linhas Mestras com Drill-down */}
                 {LINHAS_DRE_MESTRAS.map((grupo) => (
                   <React.Fragment key={grupo}>
+                    {/* Linha Mestra — exibe total do grupo formatado */}
                     <tr className="bg-white/5 border-b border-white/10 cursor-pointer hover:bg-white/10 transition-colors" onClick={() => toggleGroup(grupo)}>
                       <td className="py-3 px-4 font-bold text-acelerar-light-blue sticky left-0 bg-acelerar-dark-blue z-10 shadow-r flex items-center gap-2">
                         <span className={`transition-transform duration-200 ${expandedGroups[grupo] ? 'rotate-90' : ''}`}>▶</span>
                         {grupo}
                       </td>
                       {MESES.map((m, idx) => (
-                        <td key={m} className="py-3 px-2 text-right font-bold text-white/90">
-                          {totaisGrupo[grupo][idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <td key={m} className="py-3 px-2 text-right font-bold text-white/90 tabular-nums">
+                          {formatarMoeda(totaisGrupo[grupo][idx])}
                         </td>
                       ))}
                     </tr>
 
+                    {/* Linhas de Detalhe (drill-down) */}
                     {expandedGroups[grupo] && (categoriasPorGrupo[grupo] || []).map((cat) => {
                       const key = cat.codigo_9_digitos || cat.categoria_nibo;
                       return (
@@ -465,29 +474,56 @@ export default function OrcamentoPage() {
                             {cat.descricao_orcamento}
                             <span className="block text-[8px] text-white/20 font-normal">{key}</span>
                           </td>
-                          {MESES.map((m, idx) => (
-                            <td key={m} className="py-1 px-1">
-                              <div className="relative flex items-center group/cell">
-                                <input
-                                  type="number"
-                                  className="w-full bg-white/5 border border-white/10 rounded p-1.5 text-right text-white outline-none focus:border-acelerar-light-blue transition-all text-[10px]"
-                                  value={grid[key]?.[idx] || 0}
-                                  onChange={(e) => updateCell(key, idx, e.target.value)}
-                                />
-                                {idx < 11 && (
-                                  <button
-                                    onClick={() => propagarValor(key, idx)}
-                                    title="Propagar para os meses seguintes"
-                                    className="absolute -right-1 opacity-0 group-hover/cell:opacity-100 bg-acelerar-light-blue text-white rounded-full p-1 shadow-lg hover:scale-110 transition-all z-20"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-2 w-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          ))}
+                          {MESES.map((m, idx) => {
+                            const cellId = `${key}-${idx}`;
+                            const isEditing = celulaAtiva === cellId;
+                            const valorAtual = grid[key]?.[idx] ?? 0;
+                            return (
+                              <td key={m} className="py-1 px-1">
+                                <div className="relative flex items-center group/cell">
+                                  {isEditing ? (
+                                    // Modo edição: input numérico puro
+                                    <input
+                                      type="number"
+                                      autoFocus
+                                      className="w-full bg-white/10 border border-acelerar-light-blue rounded p-1.5 text-right text-white outline-none text-[10px] tabular-nums"
+                                      defaultValue={valorAtual}
+                                      onBlur={(e) => {
+                                        updateCell(key, idx, e.target.value);
+                                        setCelulaAtiva(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === 'Tab') {
+                                          updateCell(key, idx, e.target.value);
+                                          setCelulaAtiva(null);
+                                        }
+                                        if (e.key === 'Escape') setCelulaAtiva(null);
+                                      }}
+                                    />
+                                  ) : (
+                                    // Modo exibição: valor formatado com milhar e 2 casas
+                                    <div
+                                      className="w-full bg-white/5 border border-white/10 rounded p-1.5 text-right text-white/80 text-[10px] tabular-nums cursor-text hover:bg-white/10 hover:border-white/20 transition-all"
+                                      onClick={() => setCelulaAtiva(cellId)}
+                                    >
+                                      {formatarMoeda(valorAtual)}
+                                    </div>
+                                  )}
+                                  {!isEditing && idx < 11 && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); propagarValor(key, idx); }}
+                                      title="Propagar para os meses seguintes"
+                                      className="absolute -right-1 opacity-0 group-hover/cell:opacity-100 bg-acelerar-light-blue text-white rounded-full p-1 shadow-lg hover:scale-110 transition-all z-20"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-2 w-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })}
                         </tr>
                       );
                     })}
@@ -504,8 +540,8 @@ export default function OrcamentoPage() {
                     </span>
                   </td>
                   {MESES.map((m, idx) => (
-                    <td key={m} className="py-3 px-2 text-right font-bold text-red-300/80">
-                      {linhaIRCSLL[idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <td key={m} className="py-3 px-2 text-right font-bold text-red-300/80 tabular-nums">
+                      {formatarMoeda(linhaIRCSLL[idx])}
                     </td>
                   ))}
                 </tr>
@@ -519,13 +555,13 @@ export default function OrcamentoPage() {
                       {premissas
                         ? premissas.crescimento_tipo === 'PERCENTUAL'
                           ? `${premissas.crescimento_valor}% s/ Rec. Op.`
-                          : `Valor fixo R$ ${parseFloat(premissas.crescimento_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                          : `Valor fixo R$ ${formatarMoeda(premissas.crescimento_valor)}`
                         : 'sem premissa'}
                     </span>
                   </td>
                   {MESES.map((m, idx) => (
-                    <td key={m} className="py-3 px-2 text-right font-bold text-green-300/80">
-                      {linhaCrescimento[idx].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <td key={m} className="py-3 px-2 text-right font-bold text-green-300/80 tabular-nums">
+                      {formatarMoeda(linhaCrescimento[idx])}
                     </td>
                   ))}
                 </tr>
@@ -534,7 +570,7 @@ export default function OrcamentoPage() {
             </table>
           </div>
           <div className="bg-white/5 p-4 text-white/30 text-[10px] italic">
-            * Expanda as linhas mestras para detalhar o orçamento por categoria. As linhas em vermelho e verde são calculadas automaticamente pelas premissas configuradas.
+            * Expanda as linhas mestras para detalhar o orçamento por categoria. Clique em qualquer valor para editar. As linhas em vermelho e verde são calculadas automaticamente pelas premissas configuradas.
           </div>
         </div>
       )}
