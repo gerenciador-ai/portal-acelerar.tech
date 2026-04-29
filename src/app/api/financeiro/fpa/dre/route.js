@@ -6,6 +6,26 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ─── MAPA CANÔNICO DE EMPRESAS ────────────────────────────────────────────────
+// Converte o id interno do frontend (ex: 'victec') para o nome oficial salvo no banco (ex: 'Victec')
+const EMPRESAS_CANONICAS = {
+  'victec':   'Victec',
+  'vmctech':  'VMC Tech',
+  'grt':      'GRT',
+  'bllog':    'Bllog',
+  'm3':       'M3',
+  'acelerar': 'Acelerar',
+  'blive':    'bLive',
+  'condway':  'Condway',
+  'isket':    'Isket'
+};
+
+function resolverNomeCanônico(empresaId) {
+  const id = (empresaId || '').toLowerCase().trim();
+  return EMPRESAS_CANONICAS[id] || empresaId;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -74,8 +94,12 @@ export async function GET(request) {
           });
           idsVersao = Object.values(melhorPorEmpresa);
         } else {
-          // Para empresa individual: pega a melhor versão dessa empresa
-          const versaoEmpresa = versoes.find(v => v.empresa_nome.toLowerCase() === empresa.toLowerCase());
+          // Para empresa individual: normaliza o nome e busca a versão correspondente
+          const nomeCanônico = resolverNomeCanônico(empresa);
+          const versaoEmpresa = versoes.find(v =>
+            v.empresa_nome === nomeCanônico ||
+            v.empresa_nome.toLowerCase() === empresa.toLowerCase()
+          );
           if (versaoEmpresa) idsVersao = [versaoEmpresa.id];
         }
       }
