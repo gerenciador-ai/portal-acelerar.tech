@@ -36,11 +36,18 @@ const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "O
 const anoAtualGlobal = new Date().getFullYear();
 const ANOS_DISPONIVEIS = [0, 1, 2, 3, 4].map(i => anoAtualGlobal + i);
 
-// Converte valor string brasileiro (ex: "1.500,00") para float
+// Converte valor para float — trata formatos BR (vírgula decimal) e EN (ponto decimal)
 function parseBRL(valor) {
   if (valor === null || valor === undefined || valor === '') return 0;
-  const str = String(valor).trim().replace(/\./g, '').replace(',', '.');
-  return parseFloat(str) || 0;
+  // Se já é número, retorna diretamente
+  if (typeof valor === 'number') return valor;
+  const str = String(valor).trim();
+  // Formato BR: tem vírgula como separador decimal (ex: "4865,70" ou "4.865,70")
+  if (str.includes(',')) {
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  // Formato EN ou número puro (ex: "4865.70" ou "4865")
+  return parseFloat(str.replace(/[^0-9.-]/g, '')) || 0;
 }
 
 // Extrai o índice do mês (0-11) a partir de uma data no formato YYYY-MM-DD ou DDMMAAAA
@@ -92,6 +99,16 @@ export default function OrcamentoPage() {
   const [alertasImport, setAlertasImport] = useState([]);
   const [premissas, setPremissas] = useState(null);
   const fileInputRef = useRef(null);
+
+  const handleLimparGrid = () => {
+    const gridLimpo = {};
+    planoContas.forEach(cat => {
+      const key = cat.codigo_9_digitos || cat.categoria_nibo;
+      gridLimpo[key] = Array(12).fill(0);
+    });
+    setGrid(gridLimpo);
+    setAlertasImport([]);
+  };
 
   // Carrega o plano de contas uma única vez
   useEffect(() => {
@@ -318,7 +335,7 @@ export default function OrcamentoPage() {
       </div>
 
       {/* Barra de Controles */}
-      <div className="flex flex-wrap gap-4 items-center bg-black/20 p-4 rounded-xl border border-white/10 shadow-xl">
+      <div className="flex flex-wrap gap-3 items-end bg-black/20 p-4 rounded-xl border border-white/10 shadow-xl">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-white/40 uppercase font-bold">Ano</label>
           <select value={anoAtivo} onChange={(e) => setAnoAtivo(parseInt(e.target.value))} className={selectStyle}>
@@ -332,7 +349,7 @@ export default function OrcamentoPage() {
             <option value="FORECAST">FORECAST (Revisão)</option>
           </select>
         </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1" style={{width: '280px'}}>
           <label className="text-[10px] text-white/40 uppercase font-bold">Nome da Versão</label>
           <input
             type="text"
@@ -343,29 +360,46 @@ export default function OrcamentoPage() {
           />
         </div>
 
-        {/* Botão Importar XLSX */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-white/40 uppercase font-bold">Importar Dados</label>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importando || planoContas.length === 0}
-            className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            {importando ? 'PROCESSANDO...' : 'IMPORTAR XLSX'}
-          </button>
-          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportarXLSX} />
-        </div>
+        {/* Spacer */}
+        <div className="flex-1" />
 
-        <button
-          onClick={handleSalvar}
-          disabled={loading || !empresaAtiva}
-          className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-8 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 mt-4 sm:mt-0"
-        >
-          {loading ? 'SALVANDO...' : 'SALVAR ORÇAMENTO'}
-        </button>
+        {/* Grupo de ações alinhado à direita */}
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-white/40 uppercase font-bold">Importar Dados</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importando || planoContas.length === 0}
+                className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {importando ? 'PROCESSANDO...' : 'IMPORTAR XLSX'}
+              </button>
+              <button
+                onClick={handleLimparGrid}
+                disabled={planoContas.length === 0}
+                title="Limpar todos os valores da grid"
+                className="bg-white/10 hover:bg-red-700/60 disabled:opacity-50 text-white/70 hover:text-white px-3 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105 flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                LIMPAR
+              </button>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportarXLSX} />
+            </div>
+          </div>
+          <button
+            onClick={handleSalvar}
+            disabled={loading || !empresaAtiva}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-lg hover:scale-105"
+          >
+            {loading ? 'SALVANDO...' : 'SALVAR ORÇAMENTO'}
+          </button>
+        </div>
       </div>
 
       {/* Alertas de Importação */}
