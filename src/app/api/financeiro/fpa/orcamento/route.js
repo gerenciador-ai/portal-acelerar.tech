@@ -6,19 +6,85 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ─── MAPA CANÔNICO DE EMPRESAS ────────────────────────────────────────────────
+// Garante que o nome salvo no banco seja sempre o nome oficial de exibição,
+// independente do id interno usado pelo frontend.
+const EMPRESAS_CANONICAS = {
+  'victec':   'Victec',
+  'vmctech':  'VMC Tech',
+  'grt':      'GRT',
+  'bllog':    'Bllog',
+  'm3':       'M3',
+  'acelerar': 'Acelerar',
+  'blive':    'bLive',
+  'condway':  'Condway',
+  'isket':    'Isket'
+};
+
+// Prefixos de empresa para a nomenclatura semi-automática
+const EMPRESA_PREFIXO = {
+  'victec':   'VICTEC',
+  'vmctech':  'VMCTECH',
+  'grt':      'GRT',
+  'bllog':    'BLLOG',
+  'm3':       'M3',
+  'acelerar': 'ACELERAR',
+  'blive':    'BLIVE',
+  'condway':  'CONDWAY',
+  'isket':    'ISKET'
+};
+
+function resolverNomeCanônico(empresaId) {
+  const id = (empresaId || '').toLowerCase().trim();
+  return EMPRESAS_CANONICAS[id] || empresaId;
+}
+
+function montarNomeVersao(empresaId, ano, tipo, sufixo) {
+  const prefixo = EMPRESA_PREFIXO[(empresaId || '').toLowerCase().trim()] || empresaId.toUpperCase();
+  const tipoStr = (tipo || 'BUDGET').toUpperCase();
+  const sufixoStr = (sufixo || '').trim().toUpperCase().replace(/\s+/g, '_');
+  return `${prefixo}_${ano}_${tipoStr}_${sufixoStr}`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { empresa, ano, tipo, nome, dados } = body;
+    const { empresa, ano, tipo, sufixoVersao, dados } = body;
+
+    if (!empresa || !ano || !tipo || !sufixoVersao) {
+      return NextResponse.json({ error: "Campos obrigatórios: empresa, ano, tipo, sufixoVersao" }, { status: 400 });
+    }
+
+    const nomeCanônico = resolverNomeCanônico(empresa);
+    const nomeVersao = montarNomeVersao(empresa, ano, tipo, sufixoVersao);
+
+    // ── TRAVA DE DUPLICIDADE ──────────────────────────────────────────────────
+    const { data: existente, error: checkError } = await supabase
+      .from("fpa_versoes")
+      .select("id")
+      .eq("empresa_nome", nomeCanônico)
+      .eq("ano", ano)
+      .eq("nome_identificador", nomeVersao)
+      .maybeSingle();
+
+    if (checkError) throw checkError;
+    if (existente) {
+      return NextResponse.json(
+        { error: `Já existe uma versão com o nome "${nomeVersao}". Escolha um sufixo diferente.` },
+        { status: 409 }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // 1. Cria a versão do orçamento
     const { data: versao, error: vError } = await supabase
       .from("fpa_versoes")
       .insert([{
-        empresa_nome: empresa,
+        empresa_nome: nomeCanônico,
         ano: ano,
         tipo: tipo,
-        nome_identificador: nome,
+        nome_identificador: nomeVersao,
         versao_numero: Math.floor(Date.now() / 1000)
       }])
       .select()
@@ -51,7 +117,7 @@ export async function POST(request) {
 
         registrosParaSalvar.push({
           versao_id: versaoId,
-          empresa_nome: empresa,
+          empresa_nome: nomeCanônico,
           grupo_dre: grupo,
           codigo_9_digitos: key.length === 9 && /^\d+$/.test(key) ? key : null,
           categoria_nibo: key.length !== 9 || !/^\d+$/.test(key) ? key : null,
@@ -69,7 +135,7 @@ export async function POST(request) {
       if (dError) throw dError;
     }
 
-    return NextResponse.json({ success: true, versaoId });
+    return NextResponse.json({ success: true, versaoId, nomeVersao });
 
   } catch (error) {
     console.error("Erro na API de Orçamento:", error);
@@ -94,10 +160,12 @@ export async function GET(request) {
 
     const empresa = searchParams.get("empresa");
     const ano = searchParams.get("ano");
+    const nomeCanônico = resolverNomeCanônico(empresa);
+
     const { data, error } = await supabase
       .from("fpa_versoes")
       .select(`*, fpa_orcamento_base (*)`)
-      .eq("empresa_nome", empresa)
+      .eq("empresa_nome", nomeCanônico)
       .eq("ano", ano)
       .order("created_at", { ascending: false });
 
