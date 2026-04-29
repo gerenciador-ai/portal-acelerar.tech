@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 
 const EMPRESAS = [
-  { id: 'consolidado', nome: "Grupo Acelerar", logo: "/logo_acelerar_sidebar.png" },
+  { id: 'consolidado', nome: "Grupo Acelerar", logo: "/logo_acelerar_login.png" },
   { id: 'victec', nome: "Victec", logo: "/logo_victec.png" },
   { id: 'vmctech', nome: "VMC Tech", logo: "/logo_vmctech.png" },
   { id: 'grt', nome: "GRT", logo: "/logo_GRT.png" },
