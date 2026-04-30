@@ -22,8 +22,7 @@ export async function GET(request) {
     .eq('empresa', empresa)
     .eq('ano', parseInt(ano))
     .maybeSingle();
-
-  if (error) {
+    if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
