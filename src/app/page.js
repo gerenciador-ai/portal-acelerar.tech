@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
 
-  // Usando o novo pacote @supabase/ssr
+  // Usando o mesmo pacote @supabase/ssr já existente no projeto
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -27,14 +27,14 @@ export default function LoginPage() {
     if (error) {
       setError("Credenciais inválidas. Verifique seu e-mail e senha.");
     } else {
-      window.location.href = '/dashboard'; 
+      window.location.href = '/dashboard';
     }
   };
 
   return (
     <main className="flex items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-sm p-8 space-y-6 bg-white/10 backdrop-blur-md rounded-xl shadow-lg">
-        
+
         <Image
           src="/logo_acelerar_login.png"
           alt="Logo Acelerar.tech"
@@ -89,6 +89,23 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
+
+        {/* Novos botões de acesso — adicionados abaixo do formulário existente */}
+        <div className="flex flex-col gap-3 pt-2 border-t border-white/20">
+          <a
+            href="/esqueci-senha"
+            className="w-full px-4 py-2 text-sm font-semibold text-center text-acelerar-white border border-white/30 rounded-md hover:bg-white/10 transition-colors"
+          >
+            Esqueci a Senha
+          </a>
+          <a
+            href="/cadastro"
+            className="w-full px-4 py-2 text-sm font-semibold text-center text-acelerar-light-blue border border-acelerar-light-blue/50 rounded-md hover:bg-acelerar-light-blue/10 transition-colors"
+          >
+            Primeiro Acesso
+          </a>
+        </div>
+
       </div>
     </main>
   );
