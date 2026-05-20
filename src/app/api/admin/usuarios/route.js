@@ -36,7 +36,7 @@ export async function GET() {
 
 // ============================================================
 // PUT — Atualiza o perfil e as permissões de um usuário
-// Recebe: { usuario_id, perfil, ativo, setor_id, permissoes: [{ modulo_id, empresa_id }] }
+// Recebe: { usuario_id, perfil, ativo, setor_id, permissoes: [{ modulo_tela_id, empresa_id }] }
 // ============================================================
 export async function PUT(request) {
   try {
@@ -72,7 +72,7 @@ export async function PUT(request) {
     if (permissoes && permissoes.length > 0) {
       const novasPermissoes = permissoes.map((p) => ({
         usuario_id,
-        modulo_id: p.modulo_id,
+        modulo_tela_id: p.modulo_tela_id,
         empresa_id: p.empresa_id,
       }));
 
