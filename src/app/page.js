@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -31,11 +29,10 @@ export default function LoginPage() {
       setError("Credenciais inválidas. Verifique seu e-mail e senha.");
       setLoading(false);
     } else {
-      // router.refresh() força o Next.js a revalidar os cookies de sessão
-      // no servidor ANTES de navegar para o dashboard.
-      // Isso garante que o Middleware receba o cookie correto.
-      router.refresh();
-      router.push('/dashboard');
+      // Usa window.location.href para garantir que o browser recarregue
+      // completamente a página com os cookies de sessão já gravados.
+      // O Dashboard fará a verificação de perfil no lado do cliente.
+      window.location.href = '/dashboard';
     }
   };
 
