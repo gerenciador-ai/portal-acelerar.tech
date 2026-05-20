@@ -1,14 +1,16 @@
 "use client";
-
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+
+// Estilo base para as tags <option> — garante visual escuro em todos os browsers/SO
+const optStyle = { backgroundColor: '#0f1e35', color: 'white' };
 
 export default function EditarUsuarioPage() {
   const router = useRouter();
   const { id } = useParams();
 
   // Dados do usuário
-  const [perfil, setPerfil]     = useState(null);
+  const [perfil, setPerfil]       = useState(null);
   const [perfilSel, setPerfilSel] = useState('USUARIO');
   const [ativoSel, setAtivoSel]   = useState(false);
   const [setorSel, setSetorSel]   = useState('');
@@ -18,7 +20,7 @@ export default function EditarUsuarioPage() {
   const [empresas, setEmpresas] = useState([]);
   const [setores, setSetores]   = useState([]);
 
-  // Permissões selecionadas: Set de strings "modulo_id::empresa_id"
+  // Permissões selecionadas: Set de strings "modulo_tela_id::empresa_id"
   const [permissoesSel, setPermissoesSel] = useState(new Set());
 
   const [loading, setLoading]   = useState(true);
@@ -33,7 +35,6 @@ export default function EditarUsuarioPage() {
         fetch(`/api/admin/usuarios/${id}`),
         fetch('/api/admin/dados'),
       ]);
-
       const usuarioData = await usuarioRes.json();
       const dadosData   = await dadosRes.json();
 
@@ -44,14 +45,13 @@ export default function EditarUsuarioPage() {
       setPerfilSel(usuarioData.perfil.perfil || 'USUARIO');
       setAtivoSel(usuarioData.perfil.ativo || false);
       setSetorSel(usuarioData.perfil.setor_id || '');
-
       setModulos(dadosData.modulos || []);
       setEmpresas(dadosData.empresas || []);
       setSetores(dadosData.setores || []);
 
-      // Monta o Set de permissões atuais
+      // Monta o Set de permissões atuais usando modulo_tela_id (nome real da coluna no banco)
       const permSet = new Set(
-        (usuarioData.permissoes || []).map(p => `${p.modulo_id}::${p.empresa_id}`)
+        (usuarioData.permissoes || []).map(p => `${p.modulo_tela_id}::${p.empresa_id}`)
       );
       setPermissoesSel(permSet);
     } catch (err) {
@@ -63,9 +63,9 @@ export default function EditarUsuarioPage() {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
-  // Toggle de uma combinação módulo+empresa
-  const togglePermissao = (moduloId, empresaId) => {
-    const chave = `${moduloId}::${empresaId}`;
+  // Toggle de uma combinação tela+empresa
+  const togglePermissao = (moduloTelaId, empresaId) => {
+    const chave = `${moduloTelaId}::${empresaId}`;
     setPermissoesSel(prev => {
       const novo = new Set(prev);
       if (novo.has(chave)) { novo.delete(chave); } else { novo.add(chave); }
@@ -73,9 +73,9 @@ export default function EditarUsuarioPage() {
     });
   };
 
-  // Seleciona/deseleciona todas as empresas para um módulo
-  const toggleModuloCompleto = (moduloId) => {
-    const todasChaves = empresas.map(e => `${moduloId}::${e.id}`);
+  // Seleciona/deseleciona todas as empresas para uma tela de módulo
+  const toggleModuloCompleto = (moduloTelaId) => {
+    const todasChaves = empresas.map(e => `${moduloTelaId}::${e.id}`);
     const todasMarcadas = todasChaves.every(c => permissoesSel.has(c));
     setPermissoesSel(prev => {
       const novo = new Set(prev);
@@ -108,14 +108,12 @@ export default function EditarUsuarioPage() {
     setSalvando(true);
     setMensagem(null);
     setErro(null);
-
     try {
-      // Converte o Set de strings para array de objetos
+      // Converte o Set de strings para array de objetos com o nome correto da coluna
       const permissoes = Array.from(permissoesSel).map(chave => {
-        const [modulo_id, empresa_id] = chave.split('::');
-        return { modulo_id, empresa_id };
+        const [modulo_tela_id, empresa_id] = chave.split('::');
+        return { modulo_tela_id, empresa_id };
       });
-
       const res = await fetch('/api/admin/usuarios', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -127,10 +125,8 @@ export default function EditarUsuarioPage() {
           permissoes,
         }),
       });
-
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-
       setMensagem('Permissões salvas com sucesso!');
     } catch (err) {
       setErro('Erro ao salvar. Tente novamente.');
@@ -187,18 +183,19 @@ export default function EditarUsuarioPage() {
           1. Dados do Perfil
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Perfil */}
+          {/* Perfil de Acesso */}
           <div>
             <label className="block text-xs text-white/50 mb-1 uppercase tracking-wider">Perfil de Acesso</label>
             <select
               value={perfilSel}
               onChange={(e) => setPerfilSel(e.target.value)}
-              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
+              style={{ backgroundColor: '#0f1e35', color: 'white' }}
+              className="w-full px-3 py-2 border border-white/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
             >
-              <option value="AGUARDANDO">Aguardando</option>
-              <option value="USUARIO">Usuário</option>
-              <option value="GERENTE">Gerente</option>
-              <option value="ADMINISTRADOR">Administrador</option>
+              <option value="AGUARDANDO" style={optStyle}>Aguardando</option>
+              <option value="USUARIO" style={optStyle}>Usuário</option>
+              <option value="GERENTE" style={optStyle}>Gerente</option>
+              <option value="ADMINISTRADOR" style={optStyle}>Administrador</option>
             </select>
           </div>
           {/* Status */}
@@ -207,10 +204,11 @@ export default function EditarUsuarioPage() {
             <select
               value={ativoSel ? 'true' : 'false'}
               onChange={(e) => setAtivoSel(e.target.value === 'true')}
-              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
+              style={{ backgroundColor: '#0f1e35', color: 'white' }}
+              className="w-full px-3 py-2 border border-white/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
             >
-              <option value="true">Ativo</option>
-              <option value="false">Inativo</option>
+              <option value="true" style={optStyle}>Ativo</option>
+              <option value="false" style={optStyle}>Inativo</option>
             </select>
           </div>
           {/* Setor */}
@@ -219,11 +217,12 @@ export default function EditarUsuarioPage() {
             <select
               value={setorSel}
               onChange={(e) => setSetorSel(e.target.value)}
-              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
+              style={{ backgroundColor: '#0f1e35', color: 'white' }}
+              className="w-full px-3 py-2 border border-white/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-acelerar-light-blue"
             >
-              <option value="">— Sem setor —</option>
+              <option value="" style={optStyle}>— Sem setor —</option>
               {setores.map(s => (
-                <option key={s.id} value={s.id}>{s.nome}</option>
+                <option key={s.id} value={s.id} style={optStyle}>{s.nome}</option>
               ))}
             </select>
           </div>
@@ -240,7 +239,6 @@ export default function EditarUsuarioPage() {
             Marque as combinações de Tela + Empresa que este usuário poderá visualizar.
           </p>
         </div>
-
         {Object.entries(modulosAgrupados).map(([nomeModulo, telas]) => (
           <div key={nomeModulo}>
             {/* Cabeçalho do Módulo */}
@@ -250,7 +248,6 @@ export default function EditarUsuarioPage() {
               </span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
-
             {/* Tabela Telas × Empresas */}
             <div className="overflow-x-auto">
               <table className="text-xs w-full">
@@ -276,10 +273,7 @@ export default function EditarUsuarioPage() {
                   {telas.map(tela => (
                     <tr key={tela.id} className="border-t border-white/5">
                       <td className="py-2 pr-4 text-white/70">
-                        <div className="font-medium">{tela.tela}</div>
-                        {tela.descricao && (
-                          <div className="text-white/30 text-[10px]">{tela.descricao}</div>
-                        )}
+                        <div className="font-medium">{tela.label || tela.tela}</div>
                       </td>
                       {empresas.map(empresa => {
                         const chave = `${tela.id}::${empresa.id}`;
@@ -316,7 +310,7 @@ export default function EditarUsuarioPage() {
         ))}
       </div>
 
-      {/* Feedback e Botão Salvar */}
+      {/* Feedback */}
       {mensagem && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
           <p className="text-green-400 text-sm font-medium">{mensagem}</p>
@@ -328,6 +322,7 @@ export default function EditarUsuarioPage() {
         </div>
       )}
 
+      {/* Botões */}
       <div className="flex justify-end gap-4 pb-8">
         <button
           onClick={() => router.push('/admin')}
