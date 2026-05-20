@@ -38,7 +38,7 @@ export async function GET(request, { params }) {
         id,
         modulo_id,
         empresa_id,
-        modulos_disponiveis ( modulo, tela, descricao ),
+        modulos_disponiveis ( modulo, tela, label ),
         empresas_disponiveis ( nome )
       `)
       .eq("usuario_id", id);
