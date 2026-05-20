@@ -4,7 +4,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { TrendingUp, ShieldCheck, Users } from 'lucide-react';
+import { TrendingUp, ShieldCheck, Users, Settings } from 'lucide-react';
 
 // ============================================================
 // COMPONENTE DE CARD — MANTIDO IDÊNTICO AO ORIGINAL
@@ -50,7 +50,7 @@ function EnvironmentCard({ title, description, href, icon: Icon, backgroundImage
 }
 
 // ============================================================
-// CATÁLOGO DE MÓDULOS — MANTIDO IDÊNTICO AO ORIGINAL
+// CATÁLOGO DE MÓDULOS
 // ============================================================
 const ALL_ENVIRONMENTS = {
   COMERCIAL: {
@@ -73,6 +73,13 @@ const ALL_ENVIRONMENTS = {
     href: "/gente-e-gestao",
     icon: Users,
     backgroundImage: "/gente-gestao-bg.webp"
+  },
+  ADMINISTRACAO: {
+    title: "Administração",
+    description: "Gestão de usuários, perfis e permissões de acesso ao portal.",
+    href: "/admin",
+    icon: Settings,
+    backgroundImage: null
   }
 };
 
@@ -114,9 +121,9 @@ export default function DashboardPage() {
           return;
         }
 
-        // Administrador: acesso total
+        // Administrador: acesso total a todos os módulos + painel de administração
         if (perfil.perfil === 'ADMINISTRADOR') {
-          setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO']);
+          setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO', 'ADMINISTRACAO']);
         } else {
           // Usuário/Gerente: busca permissões granulares
           const { data: permissoes } = await supabase
