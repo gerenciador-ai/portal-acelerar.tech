@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { TrendingUp, ShieldCheck, Users } from 'lucide-react';
 
-// Componente para um Card individual
+// Componente para um Card individual - MANTIDO EXATAMENTE IGUAL AO ORIGINAL
 function EnvironmentCard({ title, description, href, icon: Icon, backgroundImage }) {
   const router = useRouter();
   return (
@@ -47,6 +47,7 @@ function EnvironmentCard({ title, description, href, icon: Icon, backgroundImage
   );
 }
 
+// DEFINIÇÕES DE AMBIENTES - MANTIDAS IGUAIS AO ORIGINAL
 const ALL_ENVIRONMENTS = {
   COMERCIAL: {
     title: "Comercial",
@@ -83,20 +84,47 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchPermissions = async () => {
+      // 1. Pega o usuário logado
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('permissions')
-          .select('environment')
-          .eq('user_id', user.id);
+      
+      if (!user) {
+        setLoading(false);
+        return; // O Middleware cuidará do redirecionamento se não houver usuário
+      }
+
+      // 2. Busca o perfil na nova tabela
+      const { data: perfil } = await supabase
+        .from('perfis_usuario')
+        .select('perfil')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (perfil?.perfil === 'ADMINISTRADOR') {
+        // Se for ADMIN, libera todos os módulos automaticamente
+        setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO']);
+      } else {
+        // Se não for ADMIN, busca permissões granulares na nova tabela
+        // Buscamos os módulos únicos que o usuário tem permissão (via modulos_disponiveis)
+        const { data: permissoes, error } = await supabase
+          .from('permissoes_usuario')
+          .select(`
+            modulos_disponiveis (
+              modulo
+            )
+          `)
+          .eq('usuario_id', user.id);
+
         if (error) {
           console.error("Erro ao buscar permissões:", error);
-        } else {
-          setUserPermissions(data.map(p => p.environment));
+        } else if (permissoes) {
+          // Extrai apenas os nomes dos módulos (sem duplicatas)
+          const modulosUnicos = [...new Set(permissoes.map(p => p.modulos_disponiveis.modulo))];
+          setUserPermissions(modulosUnicos);
         }
       }
       setLoading(false);
     };
+
     fetchPermissions();
   }, [supabase]);
 
@@ -108,14 +136,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen w-full text-white relative overflow-hidden bg-[#0f172a]">
-      {/* Marca d'água com a logo oficial extraída do PDF */}
+      {/* MARCA D'ÁGUA - MANTIDA IGUAL AO ORIGINAL */}
       <div 
         className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-100"
         style={{
           backgroundImage: "url('/marca-dagua-acelerar.webp')",
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center',
-          backgroundSize: '40%', // Ajuste o tamanho conforme preferir
+          backgroundSize: '40%',
         }}
       />
 
@@ -150,20 +178,28 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {userPermissions.map(permissionKey => {
-                const env = ALL_ENVIRONMENTS[permissionKey];
-                if (!env) return null;
-                return (
-                  <EnvironmentCard
-                    key={env.title}
-                    title={env.title}
-                    description={env.description}
-                    href={env.href}
-                    icon={env.icon}
-                    backgroundImage={env.backgroundImage}
-                  />
-                );
-              })}
+              {userPermissions.length > 0 ? (
+                userPermissions.map(permissionKey => {
+                  const env = ALL_ENVIRONMENTS[permissionKey];
+                  if (!env) return null;
+                  return (
+                    <EnvironmentCard
+                      key={env.title}
+                      title={env.title}
+                      description={env.description}
+                      href={env.href}
+                      icon={env.icon}
+                      backgroundImage={env.backgroundImage}
+                    />
+                  );
+                })
+              ) : (
+                <div className="col-span-full text-center py-12 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-acelerar-white/60 italic">
+                    Nenhum módulo habilitado. Entre em contato com o administrador.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
