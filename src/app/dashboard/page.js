@@ -86,34 +86,39 @@ export default function DashboardPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  const [userPermissions, setUserPermissions] = useState(null); // null = carregando
+  const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPermissions = async () => {
       try {
-        // Usa getUser() no cliente para validar a sessão de forma segura
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // Verifica o usuário logado no lado do cliente (cookie lido pelo browser)
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (userError || !user) {
-          // Não redireciona aqui — o Middleware já cuida disso
-          // Apenas para de carregar para não ficar em loop
-          setLoading(false);
+        if (!user) {
+          // Sem sessão: redireciona para o login
+          router.push('/');
           return;
         }
 
-        // Busca o perfil na nova tabela de controle de acesso
+        // Busca o perfil na tabela de controle de acesso
         const { data: perfil } = await supabase
           .from('perfis_usuario')
           .select('perfil, ativo')
           .eq('id', user.id)
           .maybeSingle();
 
-        if (perfil?.perfil === 'ADMINISTRADOR' && perfil?.ativo === true) {
-          // Administrador: acesso total a todos os módulos
+        // Usuário sem perfil ou inativo: redireciona para aguardando
+        if (!perfil || !perfil.ativo || perfil.perfil === 'AGUARDANDO') {
+          router.push('/aguardando');
+          return;
+        }
+
+        // Administrador: acesso total
+        if (perfil.perfil === 'ADMINISTRADOR') {
           setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO']);
-        } else if (perfil?.ativo === true) {
-          // Usuário/Gerente ativo: busca permissões granulares
+        } else {
+          // Usuário/Gerente: busca permissões granulares
           const { data: permissoes } = await supabase
             .from('permissoes_usuario')
             .select('modulos_disponiveis(modulo)')
@@ -121,18 +126,12 @@ export default function DashboardPage() {
 
           if (permissoes && permissoes.length > 0) {
             const modulosUnicos = [...new Set(
-              permissoes
-                .map(p => p.modulos_disponiveis?.modulo)
-                .filter(Boolean)
+              permissoes.map(p => p.modulos_disponiveis?.modulo).filter(Boolean)
             )];
             setUserPermissions(modulosUnicos);
           } else {
             setUserPermissions([]);
           }
-        } else {
-          // Sem perfil ou inativo: o Middleware já deveria ter bloqueado,
-          // mas como segurança extra, mostra sem módulos
-          setUserPermissions([]);
         }
       } catch (err) {
         console.error('Erro ao carregar permissões:', err);
@@ -197,7 +196,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {userPermissions && userPermissions.length > 0 ? (
+              {userPermissions.length > 0 ? (
                 userPermissions.map(permissionKey => {
                   const env = ALL_ENVIRONMENTS[permissionKey];
                   if (!env) return null;
