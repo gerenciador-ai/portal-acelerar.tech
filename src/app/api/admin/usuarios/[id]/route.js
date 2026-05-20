@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
         perfil,
         ativo,
         setor_id,
-        setores ( nome )
+        setores!perfis_usuario_setor_id_fkey ( nome )
       `)
       .eq("id", id)
       .single();
