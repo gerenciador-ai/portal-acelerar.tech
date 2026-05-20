@@ -22,7 +22,7 @@ export async function GET() {
         perfil,
         ativo,
         created_at,
-        setores ( nome )
+        setores!perfis_usuario_setor_id_fkey ( nome )
       `)
       .order("created_at", { ascending: false });
 
