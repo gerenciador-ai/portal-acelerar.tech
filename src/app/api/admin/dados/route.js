@@ -15,7 +15,7 @@ export async function GET() {
     const [modulosRes, empresasRes, setoresRes] = await Promise.all([
       supabase
         .from("modulos_disponiveis")
-        .select("id, modulo, tela, descricao")
+        .select("id, modulo, tela, label")
         .order("modulo")
         .order("tela"),
       supabase
