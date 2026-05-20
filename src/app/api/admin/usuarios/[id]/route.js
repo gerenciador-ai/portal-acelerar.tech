@@ -36,10 +36,10 @@ export async function GET(request, { params }) {
       .from("permissoes_usuario")
       .select(`
         id,
-        modulo_id,
+        modulo_tela_id,
         empresa_id,
-        modulos_disponiveis ( modulo, tela, label ),
-        empresas_disponiveis ( nome )
+        modulos_disponiveis!permissoes_usuario_modulo_tela_id_fkey ( modulo, tela, label ),
+        empresas_disponiveis!permissoes_usuario_empresa_id_fkey ( nome )
       `)
       .eq("usuario_id", id);
 
