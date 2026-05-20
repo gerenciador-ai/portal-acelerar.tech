@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Usando o mesmo pacote @supabase/ssr já existente no projeto
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -18,6 +20,7 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -26,15 +29,19 @@ export default function LoginPage() {
 
     if (error) {
       setError("Credenciais inválidas. Verifique seu e-mail e senha.");
+      setLoading(false);
     } else {
-      window.location.href = '/dashboard';
+      // router.refresh() força o Next.js a revalidar os cookies de sessão
+      // no servidor ANTES de navegar para o dashboard.
+      // Isso garante que o Middleware receba o cookie correto.
+      router.refresh();
+      router.push('/dashboard');
     }
   };
 
   return (
     <main className="flex items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-sm p-8 space-y-6 bg-white/10 backdrop-blur-md rounded-xl shadow-lg">
-
         <Image
           src="/logo_acelerar_login.png"
           alt="Logo Acelerar.tech"
@@ -43,7 +50,6 @@ export default function LoginPage() {
           className="mx-auto"
           priority
         />
-
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-acelerar-white">
@@ -75,22 +81,21 @@ export default function LoginPage() {
               placeholder="********"
             />
           </div>
-
           {error && (
             <p className="text-sm text-center text-red-400">{error}</p>
           )}
-
           <div>
             <button
               type="submit"
-              className="w-full px-4 py-2 font-bold text-acelerar-dark-blue bg-acelerar-light-blue rounded-md hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-acelerar-dark-blue focus:ring-acelerar-white"
+              disabled={loading}
+              className="w-full px-4 py-2 font-bold text-acelerar-dark-blue bg-acelerar-light-blue rounded-md hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-acelerar-dark-blue focus:ring-acelerar-white disabled:opacity-60"
             >
-              Entrar
+              {loading ? "Entrando..." : "Entrar"}
             </button>
           </div>
         </form>
 
-        {/* Novos botões de acesso — adicionados abaixo do formulário existente */}
+        {/* Botões de acesso — mantidos exatamente como na versão anterior */}
         <div className="flex flex-col gap-3 pt-2 border-t border-white/20">
           <a
             href="/esqueci-senha"
@@ -105,7 +110,6 @@ export default function LoginPage() {
             Primeiro Acesso
           </a>
         </div>
-
       </div>
     </main>
   );
