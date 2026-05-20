@@ -6,7 +6,9 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { TrendingUp, ShieldCheck, Users } from 'lucide-react';
 
-// Componente para um Card individual - MANTIDO EXATAMENTE IGUAL AO ORIGINAL
+// ============================================================
+// COMPONENTE DE CARD — MANTIDO IDÊNTICO AO ORIGINAL
+// ============================================================
 function EnvironmentCard({ title, description, href, icon: Icon, backgroundImage }) {
   const router = useRouter();
   return (
@@ -47,7 +49,9 @@ function EnvironmentCard({ title, description, href, icon: Icon, backgroundImage
   );
 }
 
-// DEFINIÇÕES DE AMBIENTES - MANTIDAS IGUAIS AO ORIGINAL
+// ============================================================
+// CATÁLOGO DE MÓDULOS — MANTIDO IDÊNTICO AO ORIGINAL
+// ============================================================
 const ALL_ENVIRONMENTS = {
   COMERCIAL: {
     title: "Comercial",
@@ -72,6 +76,9 @@ const ALL_ENVIRONMENTS = {
   }
 };
 
+// ============================================================
+// PÁGINA PRINCIPAL DO DASHBOARD
+// ============================================================
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createBrowserClient(
@@ -79,54 +86,64 @@ export default function DashboardPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  const [userPermissions, setUserPermissions] = useState([]);
+  const [userPermissions, setUserPermissions] = useState(null); // null = carregando
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPermissions = async () => {
-      // 1. Pega o usuário logado
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        setLoading(false);
-        return; // O Middleware cuidará do redirecionamento se não houver usuário
-      }
+      try {
+        // Usa getUser() no cliente para validar a sessão de forma segura
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      // 2. Busca o perfil na nova tabela
-      const { data: perfil } = await supabase
-        .from('perfis_usuario')
-        .select('perfil')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (perfil?.perfil === 'ADMINISTRADOR') {
-        // Se for ADMIN, libera todos os módulos automaticamente
-        setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO']);
-      } else {
-        // Se não for ADMIN, busca permissões granulares na nova tabela
-        // Buscamos os módulos únicos que o usuário tem permissão (via modulos_disponiveis)
-        const { data: permissoes, error } = await supabase
-          .from('permissoes_usuario')
-          .select(`
-            modulos_disponiveis (
-              modulo
-            )
-          `)
-          .eq('usuario_id', user.id);
-
-        if (error) {
-          console.error("Erro ao buscar permissões:", error);
-        } else if (permissoes) {
-          // Extrai apenas os nomes dos módulos (sem duplicatas)
-          const modulosUnicos = [...new Set(permissoes.map(p => p.modulos_disponiveis.modulo))];
-          setUserPermissions(modulosUnicos);
+        if (userError || !user) {
+          // Não redireciona aqui — o Middleware já cuida disso
+          // Apenas para de carregar para não ficar em loop
+          setLoading(false);
+          return;
         }
+
+        // Busca o perfil na nova tabela de controle de acesso
+        const { data: perfil } = await supabase
+          .from('perfis_usuario')
+          .select('perfil, ativo')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (perfil?.perfil === 'ADMINISTRADOR' && perfil?.ativo === true) {
+          // Administrador: acesso total a todos os módulos
+          setUserPermissions(['COMERCIAL', 'FINANCEIRO', 'GENTE_E_GESTAO']);
+        } else if (perfil?.ativo === true) {
+          // Usuário/Gerente ativo: busca permissões granulares
+          const { data: permissoes } = await supabase
+            .from('permissoes_usuario')
+            .select('modulos_disponiveis(modulo)')
+            .eq('usuario_id', user.id);
+
+          if (permissoes && permissoes.length > 0) {
+            const modulosUnicos = [...new Set(
+              permissoes
+                .map(p => p.modulos_disponiveis?.modulo)
+                .filter(Boolean)
+            )];
+            setUserPermissions(modulosUnicos);
+          } else {
+            setUserPermissions([]);
+          }
+        } else {
+          // Sem perfil ou inativo: o Middleware já deveria ter bloqueado,
+          // mas como segurança extra, mostra sem módulos
+          setUserPermissions([]);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar permissões:', err);
+        setUserPermissions([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchPermissions();
-  }, [supabase]);
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -136,8 +153,8 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen w-full text-white relative overflow-hidden bg-[#0f172a]">
-      {/* MARCA D'ÁGUA - MANTIDA IGUAL AO ORIGINAL */}
-      <div 
+      {/* MARCA D'ÁGUA — MANTIDA IDÊNTICA AO ORIGINAL */}
+      <div
         className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-100"
         style={{
           backgroundImage: "url('/marca-dagua-acelerar.webp')",
@@ -147,6 +164,7 @@ export default function DashboardPage() {
         }}
       />
 
+      {/* HEADER — MANTIDO IDÊNTICO AO ORIGINAL */}
       <header className="relative z-10 bg-black/30 backdrop-blur-md px-6 py-4 flex justify-between items-center shadow-lg border-b border-acelerar-light-blue/10">
         <div className="flex items-center gap-4">
           <Image src="/logo_acelerar_sidebar.png" alt="Logo Acelerar" width={50} height={50} />
@@ -160,6 +178,7 @@ export default function DashboardPage() {
         </button>
       </header>
 
+      {/* CONTEÚDO PRINCIPAL */}
       <main className="relative z-10 p-8 md:p-12">
         <div className="max-w-7xl mx-auto">
           <div className="mb-12">
@@ -173,12 +192,12 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-acelerar-light-blue mb-4" />
-                <p className="text-acelerar-white/70">Carregando permissões...</p>
+                <p className="text-acelerar-white/70">Carregando seus módulos...</p>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {userPermissions.length > 0 ? (
+              {userPermissions && userPermissions.length > 0 ? (
                 userPermissions.map(permissionKey => {
                   const env = ALL_ENVIRONMENTS[permissionKey];
                   if (!env) return null;
