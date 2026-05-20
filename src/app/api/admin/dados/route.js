@@ -17,11 +17,11 @@ export async function GET() {
         .from("modulos_disponiveis")
         .select("id, modulo, tela, label")
         .order("modulo")
-        .order("tela"),
+        .order("ordem"),
       supabase
         .from("empresas_disponiveis")
-        .select("id, nome, slug")
-        .order("nome"),
+        .select("id, nome, chave")
+        .order("ordem"),
       supabase
         .from("setores")
         .select("id, nome")
