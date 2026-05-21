@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+
+// Força o Vercel a nunca cachear esta rota — lista de usuários é sempre dinâmica
+export const dynamic = 'force-dynamic';
+
 // Usa a Service Role Key para operações administrativas (acesso total ao banco)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
