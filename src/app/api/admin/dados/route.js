@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Força o Vercel a nunca cachear esta rota — dados de catálogo podem ser atualizados
+export const dynamic = 'force-dynamic';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
 // ============================================================
 // GET — Retorna os dados estáticos para o painel admin:
 //       módulos disponíveis, empresas disponíveis e setores
@@ -27,11 +29,9 @@ export async function GET() {
         .select("id, nome")
         .order("nome"),
     ]);
-
     if (modulosRes.error) throw modulosRes.error;
     if (empresasRes.error) throw empresasRes.error;
     if (setoresRes.error) throw setoresRes.error;
-
     return NextResponse.json({
       modulos: modulosRes.data,
       empresas: empresasRes.data,
