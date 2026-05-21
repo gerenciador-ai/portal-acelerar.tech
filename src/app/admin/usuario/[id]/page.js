@@ -1,33 +1,26 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-
 // Estilo base para as tags <option> — garante visual escuro em todos os browsers/SO
 const optStyle = { backgroundColor: '#0f1e35', color: 'white' };
-
 export default function EditarUsuarioPage() {
   const router = useRouter();
   const { id } = useParams();
-
   // Dados do usuário
   const [perfil, setPerfil]       = useState(null);
   const [perfilSel, setPerfilSel] = useState('USUARIO');
   const [ativoSel, setAtivoSel]   = useState(false);
   const [setorSel, setSetorSel]   = useState('');
-
   // Dados estáticos (catálogos)
   const [modulos, setModulos]   = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [setores, setSetores]   = useState([]);
-
   // Permissões selecionadas: Set de strings "modulo_tela_id::empresa_id"
   const [permissoesSel, setPermissoesSel] = useState(new Set());
-
   const [loading, setLoading]   = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState(null);
   const [erro, setErro]         = useState(null);
-
   // Carrega dados do usuário e catálogos
   const carregarDados = useCallback(async () => {
     try {
@@ -37,10 +30,8 @@ export default function EditarUsuarioPage() {
       ]);
       const usuarioData = await usuarioRes.json();
       const dadosData   = await dadosRes.json();
-
       if (usuarioData.error) throw new Error(usuarioData.error);
       if (dadosData.error)   throw new Error(dadosData.error);
-
       setPerfil(usuarioData.perfil);
       setPerfilSel(usuarioData.perfil.perfil || 'USUARIO');
       setAtivoSel(usuarioData.perfil.ativo || false);
@@ -48,7 +39,6 @@ export default function EditarUsuarioPage() {
       setModulos(dadosData.modulos || []);
       setEmpresas(dadosData.empresas || []);
       setSetores(dadosData.setores || []);
-
       // Monta o Set de permissões atuais usando modulo_tela_id (nome real da coluna no banco)
       const permSet = new Set(
         (usuarioData.permissoes || []).map(p => `${p.modulo_tela_id}::${p.empresa_id}`)
@@ -60,9 +50,7 @@ export default function EditarUsuarioPage() {
       setLoading(false);
     }
   }, [id]);
-
   useEffect(() => { carregarDados(); }, [carregarDados]);
-
   // Toggle de uma combinação tela+empresa
   const togglePermissao = (moduloTelaId, empresaId) => {
     const chave = `${moduloTelaId}::${empresaId}`;
@@ -72,7 +60,6 @@ export default function EditarUsuarioPage() {
       return novo;
     });
   };
-
   // Seleciona/deseleciona todas as empresas para uma tela de módulo
   const toggleModuloCompleto = (moduloTelaId) => {
     const todasChaves = empresas.map(e => `${moduloTelaId}::${e.id}`);
@@ -87,7 +74,6 @@ export default function EditarUsuarioPage() {
       return novo;
     });
   };
-
   // Seleciona/deseleciona todas as telas de um módulo para uma empresa
   const toggleEmpresaCompleta = (empresaId) => {
     const todasChaves = modulos.map(m => `${m.id}::${empresaId}`);
@@ -102,7 +88,6 @@ export default function EditarUsuarioPage() {
       return novo;
     });
   };
-
   // Salva as permissões
   const salvar = async () => {
     setSalvando(true);
@@ -115,7 +100,7 @@ export default function EditarUsuarioPage() {
         return { modulo_tela_id, empresa_id };
       });
       const res = await fetch('/api/admin/usuarios', {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usuario_id: id,
@@ -134,14 +119,12 @@ export default function EditarUsuarioPage() {
       setSalvando(false);
     }
   };
-
   // Agrupa módulos por nome do módulo (ex: COMERCIAL, FINANCEIRO)
   const modulosAgrupados = modulos.reduce((acc, m) => {
     if (!acc[m.modulo]) acc[m.modulo] = [];
     acc[m.modulo].push(m);
     return acc;
   }, {});
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -152,7 +135,6 @@ export default function EditarUsuarioPage() {
       </div>
     );
   }
-
   if (!perfil) {
     return (
       <div className="text-center py-16">
@@ -163,7 +145,6 @@ export default function EditarUsuarioPage() {
       </div>
     );
   }
-
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Cabeçalho */}
@@ -176,7 +157,6 @@ export default function EditarUsuarioPage() {
           <p className="text-white/50 text-sm">{perfil.email}</p>
         </div>
       </div>
-
       {/* Seção 1: Dados do Perfil */}
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-4">
         <h2 className="text-base font-semibold text-white/80 uppercase tracking-wider">
@@ -228,7 +208,6 @@ export default function EditarUsuarioPage() {
           </div>
         </div>
       </div>
-
       {/* Seção 2: Matriz de Permissões */}
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-6">
         <div>
@@ -309,7 +288,6 @@ export default function EditarUsuarioPage() {
           </div>
         ))}
       </div>
-
       {/* Feedback */}
       {mensagem && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
@@ -321,7 +299,6 @@ export default function EditarUsuarioPage() {
           <p className="text-red-400 text-sm">{erro}</p>
         </div>
       )}
-
       {/* Botões */}
       <div className="flex justify-end gap-4 pb-8">
         <button
