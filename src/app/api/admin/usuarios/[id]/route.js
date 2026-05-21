@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Força o Vercel a nunca cachear esta rota — dados de permissões são sempre dinâmicos
+export const dynamic = 'force-dynamic';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
 // ============================================================
 // GET — Busca o perfil completo e as permissões de um usuário
 // ============================================================
 export async function GET(request, { params }) {
   try {
     const { id } = params;
-
     // Busca o perfil do usuário
     const { data: perfil, error: perfilError } = await supabase
       .from("perfis_usuario")
@@ -28,9 +29,7 @@ export async function GET(request, { params }) {
       `)
       .eq("id", id)
       .single();
-
     if (perfilError) throw perfilError;
-
     // Busca as permissões atuais do usuário
     const { data: permissoes, error: permissoesError } = await supabase
       .from("permissoes_usuario")
@@ -42,9 +41,7 @@ export async function GET(request, { params }) {
         empresas_disponiveis!permissoes_usuario_empresa_id_fkey ( nome )
       `)
       .eq("usuario_id", id);
-
     if (permissoesError) throw permissoesError;
-
     return NextResponse.json({ perfil, permissoes: permissoes || [] });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
